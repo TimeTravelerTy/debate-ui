@@ -141,11 +141,11 @@ export default function Home() {
           // Create event source for real-time updates
           console.log(`Creating EventSource for debate ${debateId}`);
           const es = new EventSource(`/api/stream?debateId=${debateId}`);
-          
+
           es.onopen = () => {
-            console.log("SSE connection opened");
+            console.log("SSE connection opened successfully");
           };
-          
+
           es.onmessage = (event) => {
             console.log("SSE message received:", event.data);
             let data;
@@ -160,48 +160,70 @@ export default function Home() {
               console.error("Error parsing SSE message:", error);
               return;
             }
-          
+
             // If the parsed JSON is a ping, just ignore it
             if (data.ping) {
               console.log("Received ping");
               return;
             }
-          
+
             // Handle error messages sent by the server
             if (data.error) {
               console.error("SSE error:", data.error);
               toast.error(`Error: ${data.error}`);
               return;
             }
-          
+
             // Process new messages
             if (data.messages && data.messages.length > 0) {
               console.log(`Received ${data.messages.length} messages:`, data.messages);
-              data.messages.forEach((msg: { type: string; id: string; role: string; content: string; timestamp: number; }) => {
+                interface MessageData {
+                id: string;
+                role: string;
+                content: string;
+                timestamp: number;
+                type: 'simulated' | 'dual';
+                }
+
+                interface MessageUpdate {
+                messages: MessageData[];
+                inProgress?: boolean;
+                error?: string;
+                }
+
+                (data.messages as MessageData[]).forEach((msg: MessageData) => {
                 if (msg.type === 'simulated') {
-                  setSimulatedMessages(prev => {
-                    if (prev.some(m => m.id === msg.id)) return prev;
-                    console.log("Adding simulated message:", msg);
-                    return [...prev, {
-                      id: msg.id,
-                      role: msg.role,
-                      content: msg.content,
-                      timestamp: msg.timestamp
-                    }];
+                  setSimulatedMessages((prev: Message[]) => {
+                  // Check if message with this ID already exists
+                  if (prev.some((m: Message) => m.id === msg.id)) {
+                    console.log("Skipping duplicate simulated message:", msg.id);
+                    return prev;
+                  }
+                  console.log("Adding simulated message:", msg);
+                  return [...prev, {
+                    id: msg.id,
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: msg.timestamp
+                  }];
                   });
                 } else if (msg.type === 'dual') {
-                  setDualAgentMessages(prev => {
-                    if (prev.some(m => m.id === msg.id)) return prev;
-                    console.log("Adding dual message:", msg);
-                    return [...prev, {
-                      id: msg.id,
-                      role: msg.role,
-                      content: msg.content,
-                      timestamp: msg.timestamp
-                    }];
+                  setDualAgentMessages((prev: Message[]) => {
+                  // Check if message with this ID already exists
+                  if (prev.some((m: Message) => m.id === msg.id)) {
+                    console.log("Skipping duplicate dual message:", msg.id);
+                    return prev;
+                  }
+                  console.log("Adding dual message:", msg);
+                  return [...prev, {
+                    id: msg.id,
+                    role: msg.role,
+                    content: msg.content,
+                    timestamp: msg.timestamp
+                  }];
                   });
                 }
-              });
+                });
             }
             
             // Check if debate is complete
@@ -212,8 +234,7 @@ export default function Home() {
               setEventSource(null);
             }
           };
-          
-          
+
           es.onerror = (error) => {
             console.error('SSE Error:', error);
             toast.error('Connection to debate stream lost. Please refresh the page.');

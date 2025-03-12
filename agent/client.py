@@ -5,7 +5,7 @@ import requests
 from openai import OpenAI
 
 class APIClient:
-    """Client for interacting with LLM APIs"""
+    """Client for interacting with LLM APIs with async support"""
     
     def __init__(self, config: Dict[str, Any]):
         """
@@ -29,7 +29,7 @@ class APIClient:
                 temperature: float = 0.7, 
                 max_tokens: int = 1000) -> str:
         """
-        Call the API to generate a response
+        Call the API to generate a response (synchronous version)
         
         Args:
             messages: List of message dictionaries
@@ -68,3 +68,26 @@ class APIClient:
         except Exception as e:
             print(f"Error calling API: {e}")
             return f"API Error: {str(e)}"
+            
+    async def call_api_async(self, 
+                messages: List[Dict[str, str]], 
+                temperature: float = 0.7, 
+                max_tokens: int = 1000) -> str:
+        """
+        Call the API to generate a response (async version)
+        
+        Args:
+            messages: List of message dictionaries
+            temperature: Sampling temperature
+            max_tokens: Maximum tokens to generate
+            
+        Returns:
+            Generated text response
+        """
+        # Convert synchronous call to async using asyncio.to_thread
+        return await asyncio.to_thread(
+            self.call_api, 
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
