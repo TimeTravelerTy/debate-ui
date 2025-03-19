@@ -1,13 +1,14 @@
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Callable
 import json
 import time
 import re
+import asyncio
 
 from .client import APIClient
 from .utils import extract_final_answer, format_message
 
 class AgentFramework:
-    """Core framework for managing agent interactions"""
+    """Core framework for managing agent interactions with asyncio support"""
     
     def __init__(self, api_config: Dict[str, Any], strategy):
         """
@@ -15,17 +16,18 @@ class AgentFramework:
         
         Args:
             api_config: Configuration for the API client
-            strategy: Strategy object to use for the debate
+            strategy: Strategy object to use for the collaboration
         """
         self.client = APIClient(api_config)
         self.strategy = strategy
         
-    def run_simulation(self, user_prompt: str) -> List[Dict[str, str]]:
+    async def run_simulation(self, user_prompt: str, message_callback: Optional[Callable] = None) -> List[Dict[str, str]]:
         """
         Run a simulated dialogue with a single model alternating between two agents
         
         Args:
             user_prompt: The problem to solve
+            message_callback: Optional callback function to receive messages in real-time
             
         Returns:
             List of message dictionaries
@@ -34,15 +36,15 @@ class AgentFramework:
         system_prompt = {
             "role": "system",
             "content": (
-                "You are a helpful assistant who will simulate a debate between two agents—Agent A and Agent B—who are "
-                "discussing and challenging each other's reasoning about the problem. For each turn, you will "
-                "generate only the argument or counterargument content, without including any role labels "
-                "(those will be provided externally). Your responses should be concise and focus on "
-                "logical reasoning. In your debate, Agent A should take the position described as: "
-                f"\"{self.strategy.get_system_prompt_a()['content']}\", while Agent B should act as: "
-                f"\"{self.strategy.get_system_prompt_b()['content']}\". "
-                "At the end of the debate, conclude with a final statement that starts with "
-                "'Final Answer:' summarizing the agreed solution."
+                "You are a reasoning agent who will simulate a structured interaction between two agents—Agent A and Agent B—who are "
+                "collaborating on solving the given problem. Your task is to alternate between these two agents' perspectives. "
+                "Each time you see '(next turn)', switch to the other agent's role. "
+                "IMPORTANT: For each response, start with either 'Agent A:' or 'Agent B:' to indicate which agent is speaking. "
+                "Your responses should be thoughtful and focused on logical reasoning. "
+                f"Agent A should take the position described as: \"{self.strategy.get_system_prompt_a()['content']}\", while "
+                f"Agent B should act as: \"{self.strategy.get_system_prompt_b()['content']}\". "
+                "At the end of the final turn (5th), Agent A should provide a final statement that starts with "
+                "'Final Answer:' summarizing the solution based on the entire discussion."
             )
         }
         
@@ -55,39 +57,64 @@ class AgentFramework:
         # Get number of turns from strategy
         num_turns = self.strategy.get_num_turns()
         
-        # Run the debate for the specified number of turns
+        # Run the dialogue for the specified number of turns
         for turn in range(num_turns):
             role = "Agent A" if turn % 2 == 0 else "Agent B"
             
-            # Prompt the model with the current role
-            prompt = messages + [{"role": "user", "content": f"{role}: "}]
+            # Prompt the model to respond as the current role
+            if turn == 0:
+                next_prompt = f"Please respond as {role}:"
+            else:
+                next_prompt = "(next turn)"
             
-            # Call the API for the current turn
-            response = self.client.call_api(
-                prompt,
+            # Call the API for the current turn (using await with the async client)
+            response = await self.client.call_api_async(
+                messages + [{"role": "user", "content": next_prompt}],
                 temperature=self.strategy.get_temperature(),
                 max_tokens=self.strategy.get_max_tokens()
             )
             
-            # Add the response to the message history (without the role)
+            # Add the response to the message history
             messages.append({"role": "assistant", "content": response})
             
-            # Add the response to the result messages (with the role)
-            result_messages.append({"role": "assistant", "content": f"{role}: {response}"})
+            # Extract the actual agent prefix if present
+            agent_role = role
+            agent_content = response
+            if response.startswith("Agent A:"):
+                agent_role = "Agent A"
+                agent_content = response[len("Agent A:"):].strip()
+            elif response.startswith("Agent B:"):
+                agent_role = "Agent B"
+                agent_content = response[len("Agent B:"):].strip()
             
-            print(f"[Simulated Turn {turn+1}] {role}: {response}")
+            # Create a message entry
+            message_entry = {
+                "role": "assistant", 
+                "agent": agent_role,
+                "content": agent_content
+            }
+            
+            # Add the response to the result messages
+            result_messages.append(message_entry)
+            
+            # Call the callback if provided
+            if message_callback:
+                await message_callback(agent_role, agent_content, "simulated")
+            
+            print(f"[Simulated Turn {turn+1}] {agent_role}: {agent_content[:100]}...")
             
             # Add a delay to avoid rate limiting
-            time.sleep(1)
+            await asyncio.sleep(1)
         
         return result_messages
     
-    def run_dual_agent(self, user_prompt: str) -> List[Dict[str, str]]:
+    async def run_dual_agent(self, user_prompt: str, message_callback: Optional[Callable] = None) -> List[Dict[str, str]]:
         """
         Run a dialogue between two separate agent instances
         
         Args:
             user_prompt: The problem to solve
+            message_callback: Optional callback function to receive messages in real-time
             
         Returns:
             List of message dictionaries
@@ -102,13 +129,13 @@ class AgentFramework:
         # Get number of turns from strategy
         num_turns = self.strategy.get_num_turns()
         
-        # Run the debate for the specified number of turns
+        # Run the dialogue for the specified number of turns
         for turn in range(num_turns):
             role = "Agent A" if turn % 2 == 0 else "Agent B"
             
             if role == "Agent A":
-                # Get response from Agent A
-                response = self.client.call_api(
+                # Get response from Agent A (using await with the async client)
+                response = await self.client.call_api_async(
                     messages_a,
                     temperature=self.strategy.get_temperature(),
                     max_tokens=self.strategy.get_max_tokens()
@@ -121,10 +148,14 @@ class AgentFramework:
                 messages_b.append({"role": "user", "content": f"Agent A: {response}"})
                 
                 # Add the response to the result messages
-                result_messages.append({"role": "assistant", "content": f"Agent A: {response}"})
+                result_messages.append({"role": "assistant", "agent": "Agent A", "content": response})
+                
+                # Call the callback if provided
+                if message_callback:
+                    await message_callback("Agent A", response, "dual")
             else:
-                # Get response from Agent B
-                response = self.client.call_api(
+                # Get response from Agent B (using await with the async client)
+                response = await self.client.call_api_async(
                     messages_b,
                     temperature=self.strategy.get_temperature(),
                     max_tokens=self.strategy.get_max_tokens()
@@ -137,12 +168,16 @@ class AgentFramework:
                 messages_a.append({"role": "user", "content": f"Agent B: {response}"})
                 
                 # Add the response to the result messages
-                result_messages.append({"role": "assistant", "content": f"Agent B: {response}"})
+                result_messages.append({"role": "assistant", "agent": "Agent B", "content": response})
+                
+                # Call the callback if provided
+                if message_callback:
+                    await message_callback("Agent B", response, "dual")
             
-            print(f"[Turn {turn+1}] {role}: {response}")
+            print(f"[Turn {turn+1}] {role}: {response[:100]}...")
             
             # Add a delay to avoid rate limiting
-            time.sleep(1)
+            await asyncio.sleep(1)
         
         return result_messages
 

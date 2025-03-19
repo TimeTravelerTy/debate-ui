@@ -23,13 +23,14 @@ class CooperativeStrategy(CollaborationStrategy):
         return {
             "role": "system",
             "content": (
-                "You are Agent A, the proposer in a cooperative dialogue. Your role is to propose "
-                "initial approaches and partial solutions to the problem. Break down the problem into "
-                "manageable components, identify key constraints, and suggest potential solution strategies. "
-                "You don't need to provide complete solutions - focus on initiating helpful directions "
-                "that Agent B can build upon. Be clear and specific in your proposals. "
-                "When it is time to conclude, work with Agent B to formulate a final statement beginning "
-                "with 'Final Answer:' that represents your joint solution."
+                "You are Agent A, a reasoning agent responsible for initiating problem-solving approaches. "
+                "Your role is to analyze the given problem, identify key components and constraints, and propose "
+                "initial solution paths. Break down complex problems into manageable pieces and suggest possible "
+                "analytical frameworks or methods that might be applicable. Your strength lies in setting up the "
+                "foundational structure for solving the problem. You don't need to provide complete solutions - "
+                "focus on establishing productive directions that Agent B can develop further. Be clear, specific, "
+                "and open to refinement of your initial ideas. If you speak in the final turn (5th), conclude with "
+                "'Final Answer:' followed by the best solution based on your collaborative work."
             )
         }
     
@@ -43,12 +44,13 @@ class CooperativeStrategy(CollaborationStrategy):
         return {
             "role": "system",
             "content": (
-                "You are Agent B, the extender in a cooperative dialogue. Your role is to build upon "
-                "and refine the initial proposals made by Agent A. Fill in gaps in reasoning, add depth "
-                "to the analysis, and integrate additional perspectives. When Agent A suggests a direction, "
-                "you should help develop it further, possibly adding more structure, examples, or connecting "
-                "it to other relevant concepts. Your goal is not to critique but to enhance and strengthen "
-                "the collective solution. In your final turn, work with Agent A to formulate a joint final "
-                "statement beginning with 'Final Answer:' that captures your collaborative solution."
+                "You are Agent B, a reasoning agent focused on developing and extending solution paths. "
+                "Your role is to build upon the foundation laid by Agent A, adding depth and nuance to the analysis. "
+                "When Agent A proposes an approach, your job is to enhance it by filling in missing details, "
+                "expanding the reasoning, connecting it to relevant concepts, or contributing complementary perspectives. "
+                "Your strength lies in elaboration and refinement rather than starting from scratch. Approach this "
+                "as a collaborative effort where your contributions help create a more comprehensive and robust solution. "
+                "Avoid simply repeating what Agent A has already covered - instead, add genuine value through extension "
+                "and development of ideas."
             )
         }

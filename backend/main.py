@@ -3,7 +3,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional
 import asyncio
-from asyncio import run_coroutine_threadsafe
 import traceback
 import uuid
 import time
@@ -97,13 +96,8 @@ async def start_debate(request: DebateRequest, background_tasks: BackgroundTasks
     # Create a message queue for this debate
     message_queues[debate_id] = asyncio.Queue()
     
-    # Start the debate process in the background
-    background_tasks.add_task(
-        run_debate, 
-        debate_id=debate_id, 
-        problem=request.problem, 
-        strategy_name=request.strategy
-    )
+    # Start the debate process in the background using asyncio
+    background_tasks.add_task(run_debate, debate_id, request.problem, request.strategy)
     
     return {"debateId": debate_id}
 
@@ -238,7 +232,7 @@ async def stream_messages(debate_id: str):
 
 
 async def run_debate(debate_id: str, problem: str, strategy_name: str):
-    """Run the debate process in the background using asyncio instead of threads"""
+    """Run the debate process in the background using asyncio"""
     try:
         # Configure API using environment variables
         api_config = {
@@ -266,27 +260,25 @@ async def run_debate(debate_id: str, problem: str, strategy_name: str):
         system_prompt_a = strategy.get_system_prompt_a()
         system_prompt_b = strategy.get_system_prompt_b()
         
-        # Create a special system prompt for the simulated debate
-        simulated_system_prompt = (
-            "You are a helpful assistant who will simulate a debate between two agents—Agent A and Agent B—who are "
-            "discussing and challenging each other's reasoning about the problem. For each turn, you will "
-            "generate only the argument or counterargument content, without including any role labels "
-            "(those will be provided externally). Your responses should be concise and focus on "
-            "logical reasoning. In your debate, Agent A should take the position described as: "
-            f"\"{system_prompt_a['content']}\", while Agent B should act as: "
-            f"\"{system_prompt_b['content']}\". "
-            "At the end of the debate, conclude with a final statement that starts with "
-            "'Final Answer:' summarizing the agreed solution."
-        )
-        
-        # Add system messages
-        await add_message(debate_id, 'System', simulated_system_prompt, 'simulated')
+        # Add system messages for the dual agent approach
         await add_message(debate_id, 'System', system_prompt_a['content'], 'dual')
         await add_message(debate_id, 'System', system_prompt_b['content'], 'dual')
         
+        # Define callback functions to handle messages in real-time
+        async def simulated_callback(role, content, msg_type):
+            await add_message(debate_id, role, content, 'simulated')
+            
+        async def dual_agent_callback(role, content, msg_type):
+            await add_message(debate_id, role, content, 'dual')
+        
         # Run simulated debate and dual agent debate concurrently using asyncio
-        sim_task = asyncio.create_task(run_simulated_debate(debate_id, framework, problem))
-        dual_task = asyncio.create_task(run_dual_agent_debate(debate_id, framework, problem))
+        sim_task = asyncio.create_task(
+            framework.run_simulation(problem, simulated_callback)
+        )
+        
+        dual_task = asyncio.create_task(
+            framework.run_dual_agent(problem, dual_agent_callback)
+        )
         
         # Wait for both tasks to complete
         await asyncio.gather(sim_task, dual_task)
@@ -318,114 +310,6 @@ async def run_debate(debate_id: str, problem: str, strategy_name: str):
                     'error': str(e),
                     'messages': []
                 })
-async def run_simulated_debate(debate_id, framework, problem):
-    """Run the simulated debate using asyncio for proper real-time updates"""
-    try:
-        strategy = framework.strategy
-        client = framework.client
-        
-        # Initialize message history
-        messages = [
-            {"role": "system", "content": active_debates[debate_id]['simulatedMessages'][0]['content']},
-            {"role": "user", "content": problem}
-        ]
-        
-        # Get number of turns from strategy
-        num_turns = strategy.get_num_turns()
-        
-        # Run the debate for the specified number of turns
-        for turn in range(num_turns):
-            role = "Agent A" if turn % 2 == 0 else "Agent B"
-            print(f"Simulated debate turn {turn+1}: {role}")
-            
-            # Prompt the model with the current role
-            prompt = messages + [{"role": "user", "content": f"{role}: "}]
-            
-            # Call the API for the current turn - need to make this non-blocking
-            response = await asyncio.to_thread(
-                client.call_api,
-                prompt,
-                temperature=strategy.get_temperature(),
-                max_tokens=strategy.get_max_tokens()
-            )
-            
-            # Add the response to the message history
-            messages.append({"role": "assistant", "content": response})
-            
-            # Add message to debate immediately after each turn
-            print(f"Adding {role} real-time message to simulated debate")
-            await add_message(debate_id, role, response, 'simulated')
-            
-            # Add a delay to avoid rate limiting
-            await asyncio.sleep(1.5)
-    except Exception as e:
-        print(f"Error in simulated debate: {e}")
-        traceback.print_exc()
-
-async def run_dual_agent_debate(debate_id, framework, problem):
-    """Run the dual agent debate using asyncio for proper real-time updates"""
-    try:
-        strategy = framework.strategy
-        client = framework.client
-        
-        # Get system prompts (they're already in the debate messages)
-        system_prompt_a = {"role": "system", "content": active_debates[debate_id]['dualAgentMessages'][0]['content']}
-        system_prompt_b = {"role": "system", "content": active_debates[debate_id]['dualAgentMessages'][1]['content']}
-        
-        # Initialize message histories for both agents
-        messages_a = [system_prompt_a, {"role": "user", "content": problem}]
-        messages_b = [system_prompt_b, {"role": "user", "content": problem}]
-        
-        # Get number of turns from strategy
-        num_turns = strategy.get_num_turns()
-        
-        # Run the debate for the specified number of turns
-        for turn in range(num_turns):
-            role = "Agent A" if turn % 2 == 0 else "Agent B"
-            print(f"Dual agent debate turn {turn+1}: {role}")
-            
-            if role == "Agent A":
-                # Get response from Agent A - make non-blocking
-                response = await asyncio.to_thread(
-                    client.call_api,
-                    messages_a,
-                    temperature=strategy.get_temperature(),
-                    max_tokens=strategy.get_max_tokens()
-                )
-                
-                # Add the response to Agent A's message history
-                messages_a.append({"role": "assistant", "content": response})
-                
-                # Add the response to Agent B's message history (as user)
-                messages_b.append({"role": "user", "content": f"Agent A: {response}"})
-                
-                # Add message to debate immediately after each turn
-                print(f"Adding Agent A real-time message to dual debate")
-                await add_message(debate_id, 'Agent A', response, 'dual')
-            else:
-                # Get response from Agent B - make non-blocking
-                response = await asyncio.to_thread(
-                    client.call_api,
-                    messages_b,
-                    temperature=strategy.get_temperature(),
-                    max_tokens=strategy.get_max_tokens()
-                )
-                
-                # Add the response to Agent B's message history
-                messages_b.append({"role": "assistant", "content": response})
-                
-                # Add the response to Agent A's message history (as user)
-                messages_a.append({"role": "user", "content": f"Agent B: {response}"})
-                
-                # Add message to debate immediately after each turn
-                print(f"Adding Agent B real-time message to dual debate")
-                await add_message(debate_id, 'Agent B', response, 'dual')
-            
-            # Add a delay to avoid rate limiting
-            await asyncio.sleep(2)
-    except Exception as e:
-        print(f"Error in dual agent debate: {e}")
-        traceback.print_exc()
 
 async def add_message(debate_id, role, content, message_type):
     """Add a message to the debate and notify listeners"""
@@ -455,31 +339,6 @@ async def add_message(debate_id, role, content, message_type):
         await queue.put({'messages': [message], 'inProgress': True})
     else:
         print(f"Warning: No message queue found for debate {debate_id}")
-       
-async def add_message(debate_id, role, content, message_type):
-    """Add a message to the debate and notify listeners"""
-    if debate_id not in active_debates:
-        return
-        
-    message = {
-        'id': str(uuid.uuid4()),
-        'type': message_type,
-        'role': role,
-        'content': content,
-        'timestamp': time.time()
-    }
-    
-    print(f"Adding message: {message_type} - {role} - {content[:50]}...")
-    
-    if message_type == 'simulated':
-        active_debates[debate_id]['simulatedMessages'].append(message)
-    else:  # dual
-        active_debates[debate_id]['dualAgentMessages'].append(message)
-    
-    # Send update to the message queue
-    if debate_id in message_queues:
-        queue = message_queues[debate_id]
-        await queue.put({'messages': [message], 'inProgress': True})
 
 # Define EventSourceResponse for SSE
 from starlette.responses import Response

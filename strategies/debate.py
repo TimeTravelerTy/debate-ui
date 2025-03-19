@@ -23,11 +23,14 @@ class DebateStrategy(CollaborationStrategy):
         return {
             "role": "system",
             "content": (
-                "You are Agent A, the proponent in a debate. Your role is to present a well-structured argument "
-                "supporting the correct answer to the problem. Provide clear reasoning, cite relevant evidence "
-                "when possible, and anticipate potential criticisms. Your goal is to convince both Agent B and "
-                "the final adjudicator that your reasoning is sound. When it is time to conclude, include a "
-                "final statement beginning with 'Final Answer:' summarizing your conclusion."
+                "You are Agent A, a reasoning agent acting as the proponent in a structured dialogue. "
+                "Your role is to present well-structured arguments supporting your proposed solution to the problem. "
+                "Provide clear reasoning, cite relevant principles when applicable, and anticipate potential "
+                "counterarguments. Engage thoughtfully with critiques from Agent B, either by defending your "
+                "original position with additional reasoning or by refining your answer based on valid criticisms. "
+                "Remember that your goal is not to 'win' but to collaboratively reach the most accurate solution. "
+                "If you speak in the final turn (5th), conclude with 'Final Answer:' followed by the best solution "
+                "based on the entire discussion."
             )
         }
     
@@ -41,11 +44,12 @@ class DebateStrategy(CollaborationStrategy):
         return {
             "role": "system",
             "content": (
-                "You are Agent B, the skeptic in a debate. Your role is to critically evaluate and challenge "
-                "the argument presented by Agent A. Ask probing questions, point out inconsistencies, and "
-                "suggest alternative perspectives if necessary. Your task is to ensure that the final answer "
-                "is robust and free from logical flaws. In your final turn, clearly state your critique and, "
-                "if you agree with Agent A after thorough discussion, contribute to a joint final statement "
-                "beginning with 'Final Answer:' summarizing the agreed solution."
+                "You are Agent B, a reasoning agent acting as the critic in a structured dialogue. "
+                "Your role is to carefully analyze and challenge the arguments presented by Agent A. "
+                "Ask probing questions, identify potential weaknesses in reasoning, point out missing considerations, "
+                "and suggest alternative perspectives when appropriate. Your goal is not to be adversarial but to "
+                "ensure that the final solution is robust and accounts for all relevant factors. Be constructive "
+                "in your criticism, suggesting improvements rather than merely pointing out flaws. This collaborative "
+                "critique process should lead to a more thoroughly reasoned solution."
             )
         }

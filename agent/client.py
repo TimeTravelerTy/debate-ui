@@ -3,7 +3,7 @@ import time
 import json
 import asyncio
 import requests
-from openai import OpenAI
+from openai import AsyncOpenAI, OpenAI
 
 class APIClient:
     """Client for interacting with LLM APIs with async support"""
@@ -19,10 +19,18 @@ class APIClient:
                 - model_name: Model to use
         """
         self.config = config
+        
+        # Initialize both sync and async clients
         self.client = OpenAI(
             api_key=config["api_key"],
             base_url=config.get("base_url")
         )
+        
+        self.async_client = AsyncOpenAI(
+            api_key=config["api_key"],
+            base_url=config.get("base_url")
+        )
+        
         self.model_name = config["model_name"]
         
     def call_api(self, 
@@ -85,10 +93,30 @@ class APIClient:
         Returns:
             Generated text response
         """
-        # Convert synchronous call to async using asyncio.to_thread
-        return await asyncio.to_thread(
-            self.call_api, 
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
+        try:
+            # Add retry mechanism with exponential backoff
+            max_retries = 3
+            retry_delay = 1  # seconds
+            
+            for attempt in range(max_retries):
+                try:
+                    response = await self.async_client.chat.completions.create(
+                        model=self.model_name,
+                        messages=messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens
+                    )
+                    
+                    # Extract response content
+                    raw_response = response.choices[0].message.content
+                    return raw_response.strip() if raw_response else ""
+                    
+                except Exception as e:
+                    if attempt < max_retries - 1:  # Don't sleep on the last attempt
+                        await asyncio.sleep(retry_delay * (2 ** attempt))  # Exponential backoff
+                    else:
+                        raise e
+                        
+        except Exception as e:
+            print(f"Error calling API asynchronously: {e}")
+            return f"API Error: {str(e)}"
