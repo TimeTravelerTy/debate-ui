@@ -29,7 +29,7 @@ class CooperativeStrategy(CollaborationStrategy):
                 "analytical frameworks or methods that might be applicable. Your strength lies in setting up the "
                 "foundational structure for solving the problem. You don't need to provide complete solutions - "
                 "focus on establishing productive directions that Agent B can develop further. Be clear, specific, "
-                "and open to refinement of your initial ideas. If you speak in the final turn (5th), conclude with "
+                "and open to refinement of your initial ideas. Only when you see a prompt indicating the final turn, conclude with "
                 "'Final Answer:' followed by the best solution based on your collaborative work."
             )
         }

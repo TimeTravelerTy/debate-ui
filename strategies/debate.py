@@ -29,7 +29,7 @@ class DebateStrategy(CollaborationStrategy):
                 "counterarguments. Engage thoughtfully with critiques from Agent B, either by defending your "
                 "original position with additional reasoning or by refining your answer based on valid criticisms. "
                 "Remember that your goal is not to 'win' but to collaboratively reach the most accurate solution. "
-                "If you speak in the final turn (5th), conclude with 'Final Answer:' followed by the best solution "
+                "Only when you see a prompt indicating the final turn, conclude with 'Final Answer:' followed by the best solution "
                 "based on the entire discussion."
             )
         }

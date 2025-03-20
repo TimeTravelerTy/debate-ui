@@ -41,10 +41,11 @@ class AgentFramework:
                 "Each time you see '(next turn)', switch to the other agent's role. "
                 "IMPORTANT: For each response, start with either 'Agent A:' or 'Agent B:' to indicate which agent is speaking. "
                 "Your responses should be thoughtful and focused on logical reasoning. "
+                "DO NOT include '(next turn)' in your response as this is just a prompt for you to switch roles. DO NOT switch roles mid-response. "
                 f"Agent A should take the position described as: \"{self.strategy.get_system_prompt_a()['content']}\", while "
                 f"Agent B should act as: \"{self.strategy.get_system_prompt_b()['content']}\". "
-                "At the end of the final turn (5th), Agent A should provide a final statement that starts with "
-                "'Final Answer:' summarizing the solution based on the entire discussion."
+                "When you see '(final turn)', provide your final conclusion. In this final turn, "
+                "Agent A should provide a final statement that starts with 'Final Answer:' the solution based on the entire discussion."
             )
         }
         
@@ -64,6 +65,8 @@ class AgentFramework:
             # Prompt the model to respond as the current role
             if turn == 0:
                 next_prompt = f"Please respond as {role}:"
+            elif turn == num_turns - 1:  # If this is the final turn
+                next_prompt = "(final turn)"
             else:
                 next_prompt = "(next turn)"
             
@@ -73,6 +76,9 @@ class AgentFramework:
                 temperature=self.strategy.get_temperature(),
                 max_tokens=self.strategy.get_max_tokens()
             )
+            
+            # Clean up any "(next turn)" or "(final turn)" that might have been included in the response
+            response = response.replace("(next turn)", "").replace("(final turn)", "")
             
             # Add the response to the message history
             messages.append({"role": "assistant", "content": response})
@@ -107,7 +113,7 @@ class AgentFramework:
             await asyncio.sleep(1)
         
         return result_messages
-    
+
     async def run_dual_agent(self, user_prompt: str, message_callback: Optional[Callable] = None) -> List[Dict[str, str]]:
         """
         Run a dialogue between two separate agent instances
@@ -134,12 +140,23 @@ class AgentFramework:
             role = "Agent A" if turn % 2 == 0 else "Agent B"
             
             if role == "Agent A":
+                # Check if this is the final turn for Agent A
+                is_final_turn = (turn == num_turns - 1)
+                
                 # Get response from Agent A (using await with the async client)
+                if is_final_turn:
+                    # Add a hint for the final turn
+                    messages_a.append({"role": "user", "content": "This is your final response. Please conclude with 'Final Answer:' followed by your conclusion based on the entire discussion."})
+                
                 response = await self.client.call_api_async(
                     messages_a,
                     temperature=self.strategy.get_temperature(),
                     max_tokens=self.strategy.get_max_tokens()
                 )
+                
+                # If we added a final turn hint, remove it from the history for clean state
+                if is_final_turn:
+                    messages_a.pop()
                 
                 # Add the response to Agent A's message history
                 messages_a.append({"role": "assistant", "content": response})
@@ -154,12 +171,23 @@ class AgentFramework:
                 if message_callback:
                     await message_callback("Agent A", response, "dual")
             else:
+                # Check if this is the final turn for Agent B
+                is_final_turn = (turn == num_turns - 1)
+                
                 # Get response from Agent B (using await with the async client)
+                if is_final_turn:
+                    # Add a hint for the final turn if it's Agent B's final turn
+                    messages_b.append({"role": "user", "content": "This is your final response. Please provide your final thoughts on the problem."})
+                
                 response = await self.client.call_api_async(
                     messages_b,
                     temperature=self.strategy.get_temperature(),
                     max_tokens=self.strategy.get_max_tokens()
                 )
+                
+                # If we added a final turn hint, remove it from the history for clean state
+                if is_final_turn:
+                    messages_b.pop()
                 
                 # Add the response to Agent B's message history
                 messages_b.append({"role": "assistant", "content": response})

@@ -29,7 +29,7 @@ class TeacherStudentStrategy(CollaborationStrategy):
                 "principles or frameworks that might be useful, and gently correct misconceptions while explaining why "
                 "they're problematic. When appropriate, introduce analogies or simplified models to clarify complex concepts. "
                 "Your goal is to help Agent B develop their own understanding and reasoning skills rather than simply "
-                "transmitting information. If you speak in the final turn (5th), conclude with 'Final Answer:' followed by "
+                "transmitting information. Only when you see a prompt indicating the final turn, conclude with 'Final Answer:' followed by "
                 "a concise summary of the solution you helped develop."
             )
         }

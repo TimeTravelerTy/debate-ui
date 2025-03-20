@@ -95,23 +95,8 @@ export default function Home() {
   const handleStartDebate = async (problem: string) => {
     try {
       // Reset previous messages
-      setSimulatedMessages([
-        {
-          id: uuidv4(),
-          role: 'User',
-          content: problem,
-          timestamp: Date.now()
-        }
-      ]);
-      
-      setDualAgentMessages([
-        {
-          id: uuidv4(),
-          role: 'User',
-          content: problem,
-          timestamp: Date.now()
-        }
-      ]);
+      setSimulatedMessages([]);
+      setDualAgentMessages([]);
       
       setInProgress(true);
       
@@ -119,6 +104,18 @@ export default function Home() {
       if (eventSource) {
         eventSource.close();
       }
+      
+      // Add the user's question as the first message in both debates
+      // Do this BEFORE sending the API request to avoid duplication
+      const userMessage = {
+        id: uuidv4(),
+        role: 'User',
+        content: problem,
+        timestamp: Date.now()
+      };
+      
+      setSimulatedMessages([userMessage]);
+      setDualAgentMessages([userMessage]);
       
       // Start debate
       toast.promise(
@@ -141,11 +138,11 @@ export default function Home() {
           // Create event source for real-time updates
           console.log(`Creating EventSource for debate ${debateId}`);
           const es = new EventSource(`/api/stream?debateId=${debateId}`);
-
+  
           es.onopen = () => {
             console.log("SSE connection opened successfully");
           };
-
+  
           es.onmessage = (event) => {
             console.log("SSE message received:", event.data);
             let data;
@@ -160,20 +157,20 @@ export default function Home() {
               console.error("Error parsing SSE message:", error);
               return;
             }
-
+  
             // If the parsed JSON is a ping, just ignore it
             if (data.ping) {
               console.log("Received ping");
               return;
             }
-
+  
             // Handle error messages sent by the server
             if (data.error) {
               console.error("SSE error:", data.error);
               toast.error(`Error: ${data.error}`);
               return;
             }
-
+  
             // Process new messages
             if (data.messages && data.messages.length > 0) {
               console.log(`Received ${data.messages.length} messages:`, data.messages);
@@ -182,17 +179,23 @@ export default function Home() {
                 role: string;
                 content: string;
                 timestamp: number;
-                type: 'simulated' | 'dual';
+                type: 'simulated' | 'dual' | 'initial';
                 }
-
+  
                 interface MessageUpdate {
                 messages: MessageData[];
                 inProgress?: boolean;
                 error?: string;
                 }
-
+  
                 (data.messages as MessageData[]).forEach((msg: MessageData) => {
-                if (msg.type === 'simulated') {
+                // Skip user messages from the server since we already added them locally
+                if (msg.role === 'User') {
+                  console.log("Skipping user message from server:", msg);
+                  return;
+                }
+                  
+                if (msg.type === 'simulated' || msg.type === 'initial') {
                   setSimulatedMessages((prev: Message[]) => {
                   // Check if message with this ID already exists
                   if (prev.some((m: Message) => m.id === msg.id)) {
@@ -234,7 +237,7 @@ export default function Home() {
               setEventSource(null);
             }
           };
-
+  
           es.onerror = (error) => {
             console.error('SSE Error:', error);
             toast.error('Connection to debate stream lost. Please refresh the page.');

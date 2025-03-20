@@ -74,9 +74,10 @@ async def start_debate(request: DebateRequest, background_tasks: BackgroundTasks
     }
     
     # Add the user's question as the first message in both debates
+    # BUT marked as "type":"initial" which the frontend will use to avoid duplication
     user_message_sim = {
         'id': str(uuid.uuid4()),
-        'type': 'simulated',
+        'type': 'initial',  # Changed from 'simulated' to 'initial'
         'role': 'User',
         'content': request.problem,
         'timestamp': time.time()
@@ -84,7 +85,7 @@ async def start_debate(request: DebateRequest, background_tasks: BackgroundTasks
     
     user_message_dual = {
         'id': str(uuid.uuid4()),
-        'type': 'dual',
+        'type': 'initial',  # Changed from 'dual' to 'initial'
         'role': 'User',
         'content': request.problem,
         'timestamp': time.time()
@@ -159,14 +160,19 @@ async def stream_messages(debate_id: str):
             # Keep track of messages we've already sent
             sent_message_ids = set()
             
-            # Send any existing messages that haven't been sent yet
+            # Send any existing messages that haven't been sent yet, EXCLUDING User messages
+            # since the frontend will handle those
             simulated_messages = [
                 msg for msg in debate['simulatedMessages'] 
-                if msg['id'] not in sent_message_ids and msg['role'] != 'System'  # Skip system messages in initial load
+                if (msg['id'] not in sent_message_ids and 
+                    msg['role'] != 'System' and 
+                    msg['role'] != 'User')  # Skip system and user messages
             ]
             dual_agent_messages = [
                 msg for msg in debate['dualAgentMessages'] 
-                if msg['id'] not in sent_message_ids and msg['role'] != 'System'  # Skip system messages in initial load
+                if (msg['id'] not in sent_message_ids and 
+                    msg['role'] != 'System' and 
+                    msg['role'] != 'User')  # Skip system and user messages
             ]
             
             if simulated_messages or dual_agent_messages:
@@ -187,6 +193,13 @@ async def stream_messages(debate_id: str):
                     
                     # Track sent message IDs if this is a message update
                     if 'messages' in message and message['messages']:
+                        # Filter out user messages
+                        message['messages'] = [msg for msg in message['messages'] if msg['role'] != 'User']
+                        
+                        if not message['messages']:
+                            # Skip sending if there are no messages after filtering
+                            continue
+                            
                         for msg in message['messages']:
                             if 'id' in msg:
                                 sent_message_ids.add(msg['id'])
@@ -203,11 +216,15 @@ async def stream_messages(debate_id: str):
                     # Check if any new messages appeared that weren't through the queue
                     new_simulated_messages = [
                         msg for msg in debate['simulatedMessages'] 
-                        if msg['id'] not in sent_message_ids and msg['role'] != 'System'
+                        if (msg['id'] not in sent_message_ids and 
+                            msg['role'] != 'System' and 
+                            msg['role'] != 'User')  # Skip system and user messages
                     ]
                     new_dual_agent_messages = [
                         msg for msg in debate['dualAgentMessages'] 
-                        if msg['id'] not in sent_message_ids and msg['role'] != 'System'
+                        if (msg['id'] not in sent_message_ids and 
+                            msg['role'] != 'System' and 
+                            msg['role'] != 'User')  # Skip system and user messages
                     ]
                     
                     if new_simulated_messages or new_dual_agent_messages:
@@ -229,7 +246,6 @@ async def stream_messages(debate_id: str):
             
     # Use EventSourceResponse for SSE
     return EventSourceResponse(event_generator())
-
 
 async def run_debate(debate_id: str, problem: str, strategy_name: str):
     """Run the debate process in the background using asyncio"""
@@ -332,14 +348,16 @@ async def add_message(debate_id, role, content, message_type):
     else:  # dual
         active_debates[debate_id]['dualAgentMessages'].append(message)
     
-    # Send update to the message queue
-    if debate_id in message_queues:
-        queue = message_queues[debate_id]
-        print(f"Queueing message for SSE: {role} - {message_type}")
-        await queue.put({'messages': [message], 'inProgress': True})
-    else:
-        print(f"Warning: No message queue found for debate {debate_id}")
-
+    # Only send non-User messages via SSE since User messages are handled by the frontend
+    if role != 'User':
+        # Send update to the message queue
+        if debate_id in message_queues:
+            queue = message_queues[debate_id]
+            print(f"Queueing message for SSE: {role} - {message_type}")
+            await queue.put({'messages': [message], 'inProgress': True})
+        else:
+            print(f"Warning: No message queue found for debate {debate_id}")
+            
 # Define EventSourceResponse for SSE
 from starlette.responses import Response
 from typing import AsyncGenerator, Callable, Any
