@@ -11,6 +11,10 @@ import sys
 from threading import Thread
 import json
 from dotenv import load_dotenv
+from agent.client import APIClient
+from datetime import datetime
+from evaluation.core import EvaluationManager
+from evaluation.benchmarks.simple_bench import SimpleBenchmark
 
 # Capture the main event loop at startup
 MAIN_LOOP = asyncio.get_event_loop()
@@ -357,7 +361,7 @@ async def add_message(debate_id, role, content, message_type):
             await queue.put({'messages': [message], 'inProgress': True})
         else:
             print(f"Warning: No message queue found for debate {debate_id}")
-            
+
 # Define EventSourceResponse for SSE
 from starlette.responses import Response
 from typing import AsyncGenerator, Callable, Any
@@ -407,6 +411,209 @@ class EventSourceResponse(Response):
             print(f"Error in SSE response: {e}")
             await send({"type": "http.response.body", "body": b"", "more_body": False})
 
+# Evaluation request model
+class EvaluationRequest(BaseModel):
+    benchmark_id: str
+    strategy_id: str
+    max_questions: Optional[int] = None
+
+# Set up results directory
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "./results")
+BENCHMARKS_DIR = os.environ.get("BENCHMARKS_DIR", "./data/benchmarks")
+
+# Ensure directories exist
+os.makedirs(RESULTS_DIR, exist_ok=True)
+os.makedirs(BENCHMARKS_DIR, exist_ok=True)
+
+# Track active evaluations
+active_evaluations = {}
+
+# Function to load benchmark
+def load_benchmark(benchmark_id: str):
+    """Load a benchmark by ID"""
+    if benchmark_id == "simple":
+        json_path = os.path.join(BENCHMARKS_DIR, "simple_bench/questions.json")
+        csv_path = os.path.join(BENCHMARKS_DIR, "simple_bench/questions.csv")
+        return SimpleBenchmark(json_path, csv_path)
+    else:
+        raise ValueError(f"Unknown benchmark: {benchmark_id}")
+
+# Function to run evaluation in background
+async def run_evaluation_task(evaluation_id: str, benchmark_id: str, strategy_id: str, max_questions: Optional[int] = None):
+    """Run evaluation in background"""
+    try:
+        # Load benchmark
+        benchmark = load_benchmark(benchmark_id)
+        
+        # Load API config
+        api_config = {
+            "api_key": os.environ.get("API_KEY"),
+            "base_url": os.environ.get("API_BASE_URL"),
+            "model_name": os.environ.get("MODEL_NAME", "deepseek-chat")
+        }
+        
+        # Initialize API client
+        client = APIClient(api_config)
+        
+        # Initialize strategies
+        strategies = {
+            "debate": DebateStrategy(),
+            "cooperative": CooperativeStrategy(),
+            "teacher-student": TeacherStudentStrategy()
+        }
+        
+        # Get the selected strategy
+        strategy = strategies[strategy_id]
+        
+        # Initialize framework with client and strategy
+        framework = AgentFramework(api_config, strategy)
+        
+        # Initialize evaluation manager
+        manager = EvaluationManager(benchmark, framework, strategies, RESULTS_DIR)
+        
+        # Update evaluation status
+        active_evaluations[evaluation_id]["status"] = "running"
+        
+        # Run evaluation
+        run_id, results = await manager.run_evaluation(strategy_id, max_questions)
+        
+        # Update evaluation status
+        active_evaluations[evaluation_id]["status"] = "completed"
+        active_evaluations[evaluation_id]["run_id"] = run_id
+        active_evaluations[evaluation_id]["results"] = results
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        # Update evaluation status with error
+        active_evaluations[evaluation_id]["status"] = "error"
+        active_evaluations[evaluation_id]["error"] = str(e)
+
+# Evaluation endpoints
+@app.post("/api/evaluation/run")
+async def start_evaluation(request: EvaluationRequest, background_tasks: BackgroundTasks):
+    """Start a benchmark evaluation"""
+    try:
+        # Validate benchmark ID
+        try:
+            load_benchmark(request.benchmark_id)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        
+        # Validate strategy ID
+        valid_strategies = ["debate", "cooperative", "teacher-student"]
+        if request.strategy_id not in valid_strategies:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid strategy: {request.strategy_id}. Valid options: {', '.join(valid_strategies)}"
+            )
+        
+        # Create evaluation ID
+        evaluation_id = str(uuid.uuid4())
+        
+        # Create initial evaluation record
+        active_evaluations[evaluation_id] = {
+            "id": evaluation_id,
+            "benchmark_id": request.benchmark_id,
+            "strategy_id": request.strategy_id,
+            "max_questions": request.max_questions,
+            "status": "pending",
+            "created_at": datetime.now().isoformat(),
+            "progress": {"current": 0, "total": 0}
+        }
+        
+        # Start evaluation in background
+        background_tasks.add_task(
+            run_evaluation_task,
+            evaluation_id,
+            request.benchmark_id,
+            request.strategy_id,
+            request.max_questions
+        )
+        
+        return {"evaluation_id": evaluation_id}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/evaluation/status/{evaluation_id}")
+async def get_evaluation_status(evaluation_id: str):
+    """Get status of a running evaluation"""
+    if evaluation_id not in active_evaluations:
+        raise HTTPException(status_code=404, detail="Evaluation not found")
+    
+    return active_evaluations[evaluation_id]
+
+@app.get("/api/evaluation/runs")
+async def get_evaluation_runs():
+    """Get list of available evaluation runs"""
+    try:
+        if not os.path.exists(RESULTS_DIR):
+            return {"runs": []}
+            
+        run_files = [f for f in os.listdir(RESULTS_DIR) if f.startswith("result_")]
+        
+        runs = []
+        for file in run_files:
+            path = os.path.join(RESULTS_DIR, file)
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                    runs.append({
+                        "id": data.get("run_id", "unknown"),
+                        "strategy": data.get("strategy", "unknown"),
+                        "timestamp": data.get("timestamp", "unknown"),
+                        "benchmark": data.get("benchmark", "unknown")
+                    })
+            except Exception as e:
+                print(f"Error loading run file {file}: {e}")
+        
+        # Sort runs by timestamp (newest first)
+        runs.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        return {"runs": runs}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/evaluation/runs/{run_id}")
+async def get_evaluation_run(run_id: str):
+    """Get details of a specific evaluation run"""
+    try:
+        file_path = os.path.join(RESULTS_DIR, f"result_{run_id}.json")
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Run not found")
+        
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        return data
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/api/logs/{log_id}")
+async def get_conversation_log(log_id: str):
+    """Get a specific conversation log"""
+    try:
+        file_path = os.path.join(RESULTS_DIR, f"log_{log_id}.json")
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Log not found")
+        
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+        
+        return data
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
 if __name__ == "__main__":
     import uvicorn
     # Get port from environment variable or use default

@@ -20,6 +20,15 @@ class AgentFramework:
         """
         self.client = APIClient(api_config)
         self.strategy = strategy
+
+    def set_strategy(self, strategy):
+        """
+        Set or update the strategy used by the framework
+        
+        Args:
+            strategy: Strategy object to use
+        """
+        self.strategy = strategy
         
     async def run_simulation(self, user_prompt: str, message_callback: Optional[Callable] = None) -> List[Dict[str, str]]:
         """

@@ -13,7 +13,7 @@ class CooperativeStrategy(CollaborationStrategy):
         """
         super().__init__("cooperative", config_path)
     
-    def get_system_prompt_a(self) -> Dict[str, str]:
+    def _get_base_system_prompt_a(self) -> Dict[str, str]:
         """
         Get system prompt for Agent A (Proposer)
         
@@ -34,7 +34,7 @@ class CooperativeStrategy(CollaborationStrategy):
             )
         }
     
-    def get_system_prompt_b(self) -> Dict[str, str]:
+    def _get_base_system_prompt_b(self) -> Dict[str, str]:
         """
         Get system prompt for Agent B (Extender)
         
