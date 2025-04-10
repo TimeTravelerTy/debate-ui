@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { ThemeProvider } from '../components/ThemeProvider';
-import { ThemeToggle } from '../components/ThemeToggle';
 import { ProblemForm } from '../components/ProblemForm';
 import { StrategySelector } from '../components/StrategySelector';
 import { DebateArena } from '../components/DebateArena';
@@ -251,7 +249,7 @@ export default function Home() {
         },
         {
           loading: 'Starting debate...',
-          success: (debateId) => `Debate started! ID: ${debateId}`,
+          success: (debateId) => `Debate started!`,
           error: (err) => `Error: ${err.message}`
         }
       );
@@ -264,29 +262,23 @@ export default function Home() {
 
 
   return (
-    <main className="min-h-screen bg-gray-950 text-gray-100">
+    <main className="container mx-auto py-8 px-4">
       <Toaster richColors position="top-center" />
-      <div className="container mx-auto py-8 px-4">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-2xl font-bold">Agent Debate Lab</h1>
-          <ThemeToggle />
-        </div>
+      
+      <div className="grid grid-cols-1 gap-6">
+        <ProblemForm onSubmit={handleStartDebate} isLoading={inProgress} />
         
-        <div className="grid grid-cols-1 gap-6">
-          <ProblemForm onSubmit={handleStartDebate} isLoading={inProgress} />
-          
-          <StrategySelector 
-            strategies={strategies} 
-            selectedStrategy={selectedStrategy} 
-            onStrategyChange={setSelectedStrategy}
-          />
-          
-          <DebateArena 
-            simulatedMessages={simulatedMessages} 
-            dualAgentMessages={dualAgentMessages}
-            inProgress={inProgress}
-          />
-        </div>
+        <StrategySelector 
+          strategies={strategies} 
+          selectedStrategy={selectedStrategy} 
+          onStrategyChange={setSelectedStrategy}
+        />
+        
+        <DebateArena 
+          simulatedMessages={simulatedMessages} 
+          dualAgentMessages={dualAgentMessages}
+          inProgress={inProgress}
+        />
       </div>
     </main>
   );

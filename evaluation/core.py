@@ -1,272 +1,194 @@
-import os
-import time
-import json
-import uuid
-import asyncio
-from datetime import datetime
-from typing import Dict, List, Any, Optional, Callable, Tuple, TypedDict
+"""Core evaluation framework"""
 
-from agent.framework import AgentFramework
-from .benchmarks.base import Benchmark
+from typing import Dict, List, Any, Optional, Tuple
+import json
+import os
+import asyncio
+import time
+from datetime import datetime
 
 class EvaluationManager:
-    """Core manager for running evaluations"""
+    """Manager for running benchmark evaluations"""
     
-    def __init__(
-        self, 
-        benchmark: Benchmark, 
-        agent_framework: AgentFramework, 
-        strategies: Dict[str, Any],
-        output_dir: str = "./results"
-    ):
+    def __init__(self, benchmark, framework, strategies, results_dir):
         """
         Initialize the evaluation manager
         
         Args:
-            benchmark: Benchmark instance
-            agent_framework: AgentFramework instance
-            strategies: Dictionary mapping strategy IDs to strategy instances
-            output_dir: Directory to store evaluation results
+            benchmark: The benchmark to evaluate
+            framework: The agent framework to use
+            strategies: Dict of available strategies
+            results_dir: Directory to save results
         """
         self.benchmark = benchmark
-        self.agent_framework = agent_framework
+        self.framework = framework
         self.strategies = strategies
-        self.output_dir = output_dir
+        self.results_dir = results_dir
         
-        # Create output directory if it doesn't exist
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-            
-    async def run_evaluation(
-        self, 
-        strategy_id: str, 
-        max_questions: Optional[int] = None,
-        progress_callback: Optional[Callable[[int, int, Dict[str, Any]], None]] = None
-    ) -> Tuple[str, List[Dict[str, Any]]]:
+        # Ensure results directory exists
+        os.makedirs(results_dir, exist_ok=True)
+    
+    async def run_evaluation(self, strategy_id: str, max_questions: Optional[int] = None) -> Tuple[str, Dict[str, Any]]:
         """
-        Run evaluation for a specific strategy
+        Run a benchmark evaluation
         
         Args:
             strategy_id: ID of the strategy to use
             max_questions: Maximum number of questions to evaluate
-            progress_callback: Optional callback for progress updates
             
         Returns:
-            Tuple containing the run ID and results
+            Tuple of (run_id, results_dict)
         """
-        # Check if strategy exists
-        if strategy_id not in self.strategies:
-            raise ValueError(f"Strategy '{strategy_id}' not found")
-            
-        questions = self.benchmark.get_questions()
-        
-        # Limit questions if specified
-        if max_questions:
-            question_ids = sorted(list(questions.keys()))[:max_questions]
+        # Get the strategy
+        if strategy_id in self.strategies:
+            strategy = self.strategies[strategy_id]
         else:
-            question_ids = sorted(list(questions.keys()))
-            
-        strategy = self.strategies[strategy_id]
+            raise ValueError(f"Unknown strategy: {strategy_id}")
+        
+        # Update the framework's strategy
+        self.framework.set_strategy(strategy)
+        
+        # Get questions from the benchmark
+        questions = self.benchmark.get_questions(max_questions)
+        if not questions:
+            raise ValueError("No questions loaded from benchmark")
+        
+        print(f"Running evaluation with {len(questions)} questions from {self.benchmark.name}")
+        print(f"Using strategy: {strategy_id}")
+        
         results = []
+        total_simulated_correct = 0
+        total_dual_correct = 0
         
-        # Set benchmark name in strategy
-        strategy.benchmark_name = self.benchmark.name
-        
-        # Create unique run ID
-        run_id = f"{strategy_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # Set the strategy in the agent framework
-        self.agent_framework.set_strategy(strategy)
-        
-        for i, q_id in enumerate(question_ids):
-            print(f"Processing question {q_id} ({i+1}/{len(question_ids)})")
-            question_data = questions[q_id]
-            question = question_data["prompt"]
+        for i, question in enumerate(questions):
+            print(f"\nQuestion {i+1}/{len(questions)} - ID: {question['id']}")
             
-            # Run simulated and dual agent approaches in parallel
-            sim_task = asyncio.create_task(
-                self._run_simulated(question)
-            )
+            # Create a unique log ID for this question
+            log_id = f"{self.benchmark.name.lower()}_{question['id']}_{int(time.time())}"
             
-            dual_task = asyncio.create_task(
-                self._run_dual_agent(question)
-            )
-            
-            # Wait for both tasks to complete
             try:
-                # Use asyncio.gather to run both tasks concurrently
-                simulated_result, dual_result = await asyncio.gather(sim_task, dual_task)
-                simulated_messages, simulated_final, single_time = simulated_result
-                dual_messages, dual_final, dual_time = dual_result
+                # Run simulated debate
+                print("Running simulated debate...")
+                sim_start_time = time.time()
+                sim_messages = await self.framework.run_simulation(question['question'])
+                sim_end_time = time.time()
+                
+                # Extract final answer from simulated debate
+                sim_answer = self.framework.extract_final_answer(sim_messages)
+                sim_time = sim_end_time - sim_start_time
+                
+                # Run dual agent debate
+                print("Running dual agent debate...")
+                dual_start_time = time.time()
+                dual_messages = await self.framework.run_dual_agent(question['question'])
+                dual_end_time = time.time()
+                
+                # Extract final answer from dual agent debate
+                dual_answer = self.framework.extract_final_answer(dual_messages)
+                dual_time = dual_end_time - dual_start_time
+                
+                # Evaluate correctness
+                sim_correct = self.benchmark.evaluate_answer(sim_answer, question['ground_truth'])
+                dual_correct = self.benchmark.evaluate_answer(dual_answer, question['ground_truth'])
+                
+                if sim_correct:
+                    total_simulated_correct += 1
+                if dual_correct:
+                    total_dual_correct += 1
+                
+                # Create result entry
+                result = {
+                    "question_id": question['id'],
+                    "question": question['question'],
+                    "ground_truth": question['ground_truth'],
+                    "category": question.get('category', 'unknown'),
+                    "difficulty": question.get('difficulty', 'unknown'),
+                    "simulated": {
+                        "answer": sim_answer,
+                        "correct": sim_correct,
+                        "time": sim_time,
+                        "log_id": f"{log_id}_sim"
+                    },
+                    "dual": {
+                        "answer": dual_answer,
+                        "correct": dual_correct,
+                        "time": dual_time,
+                        "log_id": f"{log_id}_dual"
+                    }
+                }
+                
+                # Save individual conversation logs
+                sim_log_path = os.path.join(self.results_dir, f"log_{log_id}_sim.json")
+                with open(sim_log_path, 'w') as f:
+                    json.dump({
+                        "question_id": question['id'],
+                        "question": question['question'],
+                        "ground_truth": question['ground_truth'],
+                        "strategy": strategy_id,
+                        "variant": "simulated",
+                        "simulated_messages": sim_messages
+                    }, f, indent=2)
+                    
+                dual_log_path = os.path.join(self.results_dir, f"log_{log_id}_dual.json")
+                with open(dual_log_path, 'w') as f:
+                    json.dump({
+                        "question_id": question['id'],
+                        "question": question['question'],
+                        "ground_truth": question['ground_truth'],
+                        "strategy": strategy_id,
+                        "variant": "dual",
+                        "dual_messages": dual_messages
+                    }, f, indent=2)
+                
+                results.append(result)
+                
+                # Print progress
+                print(f"Question: {question['id']}")
+                print(f"Ground Truth: {question['ground_truth']}")
+                print(f"Simulated Answer: {sim_answer} - {'✓' if sim_correct else '✗'} ({sim_time:.2f}s)")
+                print(f"Dual Agent Answer: {dual_answer} - {'✓' if dual_correct else '✗'} ({dual_time:.2f}s)")
+                
             except Exception as e:
-                print(f"Error running tasks in parallel: {e}")
-                # Fallback to sequential execution if parallel fails
-                simulated_result = await self._run_simulated(question)
-                dual_result = await self._run_dual_agent(question)
-                simulated_messages, simulated_final, single_time = simulated_result
-                dual_messages, dual_final, dual_time = dual_result
-            
-            # Extract and evaluate answers
-            simulated_eval = self.benchmark.evaluate_response(q_id, simulated_final)
-            dual_eval = self.benchmark.evaluate_response(q_id, dual_final)
-            
-            # Save conversation logs
-            log_id = f"{run_id}_{q_id}"
-            self._save_conversation_log(log_id, {
-                "question_id": q_id,
-                "question": question,
-                "simulated_messages": simulated_messages,
-                "dual_messages": dual_messages,
-                "simulated_final": simulated_final,
-                "dual_final": dual_final
-            })
-            
-            # Record result
-            result = {
-                "question_id": q_id,
-                "simulated": {
-                    "correct": simulated_eval["correct"],
-                    "answer": simulated_eval["extracted_answer"],
-                    "time": single_time,
-                    "log_id": log_id
-                },
-                "dual": {
-                    "correct": dual_eval["correct"],
-                    "answer": dual_eval["extracted_answer"],
-                    "time": dual_time,
-                    "log_id": log_id
-                },
-                "ground_truth": simulated_eval["ground_truth"]
-            }
-            results.append(result)
-            
-            # Call progress callback if provided
-            if progress_callback:
-                progress_callback(i + 1, len(question_ids), result)
-                
-            # Save intermediate results
-            self._save_results(run_id, results, strategy_id)
-            
-            # Add a delay between questions to avoid rate limiting
-            await asyncio.sleep(2)
-                
-        # Save final results
-        self._save_results(run_id, results, strategy_id)
-        return run_id, results
-
-    async def _run_simulated(self, question: str) -> Tuple[List[Dict[str, Any]], str, float]:
-        """
-        Run the simulated approach for a question
+                print(f"Error processing question {question['id']}: {e}")
+                import traceback
+                traceback.print_exc()
         
-        Args:
-            question: The question to process
-            
-        Returns:
-            Tuple of (messages, final_answer, elapsed_time)
-        """
-        start_time = time.time()
-        try:
-            messages = await self.agent_framework.run_simulation(question)
-            final_answer = self._get_final_answer(messages)
-        except Exception as e:
-            print(f"Error in simulated run: {e}")
-            messages = []
-            final_answer = f"Error: {str(e)}"
-        elapsed_time = time.time() - start_time
-        
-        return messages, final_answer, elapsed_time
-
-    async def _run_dual_agent(self, question: str) -> Tuple[List[Dict[str, Any]], str, float]:
-        """
-        Run the dual agent approach for a question
-        
-        Args:
-            question: The question to process
-            
-        Returns:
-            Tuple of (messages, final_answer, elapsed_time)
-        """
-        start_time = time.time()
-        try:
-            messages = await self.agent_framework.run_dual_agent(question)
-            final_answer = self._get_final_answer(messages)
-        except Exception as e:
-            print(f"Error in dual agent run: {e}")
-            messages = []
-            final_answer = f"Error: {str(e)}"
-        elapsed_time = time.time() - start_time
-        
-        return messages, final_answer, elapsed_time  
-    def _save_conversation_log(self, log_id: str, data: Dict[str, Any]) -> None:
-        """
-        Save raw conversation logs
-        
-        Args:
-            log_id: Unique ID for the log
-            data: Log data to save
-        """
-        log_path = os.path.join(self.output_dir, f"log_{log_id}.json")
-        with open(log_path, 'w') as f:
-            json.dump(data, f, indent=2)
-            
-    def _save_results(self, run_id: str, results: List[Dict[str, Any]], strategy_id: str) -> None:
-        """
-        Save summary results
-        
-        Args:
-            run_id: Unique ID for the run
-            results: List of result dictionaries
-            strategy_id: ID of the strategy used
-        """
-        # Calculate statistics
-        simulated_correct = sum(1 for r in results if r.get("simulated", {}).get("correct", False))
-        dual_correct = sum(1 for r in results if r.get("dual", {}).get("correct", False))
-        total = len(results)
-        
-        if total == 0:
-            simulated_accuracy = 0
-            dual_accuracy = 0
-        else:
-            simulated_accuracy = simulated_correct / total
-            dual_accuracy = dual_correct / total
+        # Calculate summary
+        total_questions = len(questions)
+        simulated_accuracy = total_simulated_correct / total_questions if total_questions > 0 else 0
+        dual_accuracy = total_dual_correct / total_questions if total_questions > 0 else 0
         
         summary = {
-            "run_id": run_id,
-            "strategy": strategy_id,
-            "timestamp": datetime.now().isoformat(),
-            "benchmark": self.benchmark.name,
-            "results": results,
-            "summary": {
-                "simulated_accuracy": simulated_accuracy,
-                "dual_accuracy": dual_accuracy,
-                "total_questions": total,
-                "simulated_correct": simulated_correct,
-                "dual_correct": dual_correct
-            }
+            "total_questions": total_questions,
+            "simulated_correct": total_simulated_correct,
+            "dual_correct": total_dual_correct,
+            "simulated_accuracy": simulated_accuracy,
+            "dual_accuracy": dual_accuracy
         }
         
-        result_path = os.path.join(self.output_dir, f"result_{run_id}.json")
-        with open(result_path, 'w') as f:
-            json.dump(summary, f, indent=2)
-            
-    def _get_final_answer(self, messages: List[Dict[str, Any]]) -> str:
-        """
-        Extract the final answer from the conversation
+        # Create timestamp and unique run ID
+        timestamp = datetime.now().isoformat()
+        run_id = f"{self.benchmark.name.lower()}_{strategy_id}_{int(time.time())}"
         
-        Args:
-            messages: List of message dictionaries
-            
-        Returns:
-            Final answer as a string
-        """
-        # If empty messages, return empty string
-        if not messages:
-            return ""
-            
-        # Get the last message from the assistant
-        for message in reversed(messages):
-            if message.get("role") == "assistant" or message.get("agent", "").startswith("Agent"):
-                return message.get("content", "")
-                
-        # If no assistant message found, return the last message content
-        return messages[-1].get("content", "")
+        # Save results
+        output = {
+            "run_id": run_id,
+            "timestamp": timestamp,
+            "benchmark": self.benchmark.name,
+            "strategy": strategy_id,
+            "summary": summary,
+            "results": results
+        }
+        
+        results_path = os.path.join(self.results_dir, f"result_{run_id}.json")
+        with open(results_path, 'w') as f:
+            json.dump(output, f, indent=2)
+        
+        # Print summary
+        print("\n--- SUMMARY ---")
+        print(f"Total questions: {total_questions}")
+        print(f"Simulated correct: {total_simulated_correct} ({simulated_accuracy:.2%})")
+        print(f"Dual agent correct: {total_dual_correct} ({dual_accuracy:.2%})")
+        print(f"Results saved to: {results_path}")
+        
+        return run_id, output

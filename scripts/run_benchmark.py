@@ -1,53 +1,81 @@
-import os
+"""
+Script to run benchmark evaluations
+"""
+
 import sys
-import asyncio
+import os
 import argparse
 import json
+import asyncio
+import time
 from datetime import datetime
+from dotenv import load_dotenv
 
-# Add parent directory to path
+# Add the parent directory to the Python path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from evaluation.core import EvaluationManager
-from evaluation.benchmarks.simple_bench import SimpleBenchmark
+# Load environment variables
+load_dotenv()
+
+# Import agent framework modules
 from agent.framework import AgentFramework
 from agent.client import APIClient
 from strategies.debate import DebateStrategy
 from strategies.cooperative import CooperativeStrategy
 from strategies.teacher_student import TeacherStudentStrategy
 
+# Import benchmark modules
+from evaluation.benchmarks.simple_bench import SimpleBenchmark
+from evaluation.benchmarks.gpqa_benchmark import GPQABenchmark
+from evaluation.core import EvaluationManager
+
+# Configure argument parser
+parser = argparse.ArgumentParser(description='Run benchmark evaluations')
+parser.add_argument('--benchmark', type=str, required=True, 
+                    choices=['simple', 'gpqa-diamond', 'gpqa-experts', 'gpqa-extended', 'gpqa-main'],
+                    help='Benchmark to evaluate')
+parser.add_argument('--strategy', type=str, default='debate', 
+                    choices=['debate', 'cooperative', 'teacher-student'],
+                    help='Strategy to use for the evaluation')
+parser.add_argument('--questions', type=int, default=5,
+                    help='Number of questions to evaluate')
+parser.add_argument('--results-dir', type=str, default='./results',
+                    help='Directory to save results')
+parser.add_argument('--data-dir', type=str, default='./data/benchmarks',
+                    help='Directory containing benchmark datasets')
+parser.add_argument('--api-key', type=str, default=None,
+                    help='API key for the model (or use API_KEY env var)')
+parser.add_argument('--base-url', type=str, default=None,
+                    help='Base URL for the API (or use API_BASE_URL env var)')
+parser.add_argument('--model', type=str, default=None,
+                    help='Model name to use (or use MODEL_NAME env var)')
+
 async def main():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description="Run a benchmark evaluation")
-    parser.add_argument("--strategy", choices=["debate", "cooperative", "teacher-student"], 
-                        default="debate", help="Strategy to use")
-    parser.add_argument("--benchmark", default="simple", help="Benchmark to use")
-    parser.add_argument("--max", type=int, default=None, help="Maximum number of questions")
-    parser.add_argument("--output", default="./results", help="Output directory")
-    
+    """Run the benchmark evaluation"""
     args = parser.parse_args()
     
-    # Load API credentials from environment or .env file
-    from dotenv import load_dotenv
-    load_dotenv()
+    # Set up directories
+    os.makedirs(args.results_dir, exist_ok=True)
+    os.makedirs(args.data_dir, exist_ok=True)
     
-    # Setup API config
+    # Load API config
     api_config = {
-        "api_key": os.environ.get("API_KEY"),
-        "base_url": os.environ.get("API_BASE_URL"),
-        "model_name": os.environ.get("MODEL_NAME", "deepseek-chat")
+        "api_key": args.api_key or os.environ.get("API_KEY"),
+        "base_url": args.base_url or os.environ.get("API_BASE_URL"),
+        "model_name": args.model or os.environ.get("MODEL_NAME")
     }
     
-    # Check for required environment variables
     if not api_config["api_key"]:
-        print("Error: API_KEY environment variable not set")
-        sys.exit(1)
-    
+        print("Error: API key not provided. Use --api-key or set API_KEY environment variable.")
+        return
+        
     if not api_config["base_url"]:
-        print("Error: API_BASE_URL environment variable not set")
-        sys.exit(1)
-    
-    print(f"Using API: {api_config['base_url']} with model {api_config['model_name']}")
+        print("Error: Base URL not provided. Use --base-url or set API_BASE_URL environment variable.")
+        return
+        
+    if not api_config["model_name"]:
+        print("Error: Model name not provided. Use --model or set MODEL_NAME environment variable.")
+        return
     
     # Initialize strategies
     strategies = {
@@ -56,54 +84,52 @@ async def main():
         "teacher-student": TeacherStudentStrategy()
     }
     
-    # Initialize API client
-    client = APIClient(api_config)
+    # Get the selected strategy
+    strategy = strategies[args.strategy]
     
-    # Initialize framework with client and selected strategy
-    framework = AgentFramework(api_config, strategies[args.strategy])
+    # Initialize framework
+    framework = AgentFramework(api_config, strategy)
     
-    # Initialize benchmark
-    if args.benchmark == "simple":
-        benchmark_dir = os.path.join("data", "benchmarks", "simple_bench")
-        json_path = os.path.join(benchmark_dir, "questions.json")
-        csv_path = os.path.join(benchmark_dir, "questions.csv")
+    # Load the appropriate benchmark
+    if args.benchmark == 'simple':
+        json_path = os.path.join(args.data_dir, "simple_bench/questions.json")
+        csv_path = os.path.join(args.data_dir, "simple_bench/questions.csv")
         
-        # Check if files exist
-        if not os.path.exists(json_path):
-            print(f"Error: Benchmark file not found: {json_path}")
-            sys.exit(1)
+        if not os.path.exists(json_path) or not os.path.exists(csv_path):
+            print(f"Error: Simple benchmark files not found at {json_path} or {csv_path}")
+            return
             
-        benchmark = SimpleBenchmark(json_path, csv_path if os.path.exists(csv_path) else None)
+        benchmark = SimpleBenchmark(json_path, csv_path)
+        # Set the benchmark name for the strategy
+        strategy.benchmark_name = "SimpleBench"
+        
+    elif args.benchmark.startswith('gpqa-'):
+        variant = args.benchmark.split('-')[1]  # Extract variant (diamond, experts, etc.)
+        csv_path = os.path.join(args.data_dir, f"gpqa/gpqa_{variant}.csv")
+        
+        if not os.path.exists(csv_path):
+            print(f"Error: GPQA dataset file not found at {csv_path}")
+            return
+            
+        benchmark = GPQABenchmark(csv_path, variant, args.questions)
+        # Set the benchmark name for the strategy
+        strategy.benchmark_name = "GPQA"
+        
     else:
         print(f"Error: Unknown benchmark: {args.benchmark}")
-        sys.exit(1)
-        
+        return
+    
     # Initialize evaluation manager
-    manager = EvaluationManager(benchmark, framework, strategies, args.output)
+    manager = EvaluationManager(benchmark, framework, strategies, args.results_dir)
     
     # Run evaluation
-    print(f"Running {args.strategy} strategy on {args.benchmark} benchmark...")
-    if args.max:
-        print(f"Using maximum of {args.max} questions")
-    
-    start_time = datetime.now()
-    run_id, results = await manager.run_evaluation(args.strategy, args.max)
-    end_time = datetime.now()
-    
-    # Get the results
-    result_path = os.path.join(args.output, f"result_{run_id}.json")
-    with open(result_path, 'r') as f:
-        result_data = json.load(f)
-        
-    summary = result_data["summary"]
-    
-    # Print results
-    print(f"\nEvaluation complete in {end_time - start_time}")
-    print(f"Run ID: {run_id}")
-    print(f"Total questions: {summary['total_questions']}")
-    print(f"Single agent accuracy: {summary['simulated_accuracy']:.2f} ({summary['simulated_correct']}/{summary['total_questions']})")
-    print(f"Dual agent accuracy: {summary['dual_accuracy']:.2f} ({summary['dual_correct']}/{summary['total_questions']})")
-    print(f"Results saved to {result_path}")
-    
+    try:
+        run_id, results = await manager.run_evaluation(args.strategy, args.questions)
+        print(f"Evaluation complete. Run ID: {run_id}")
+    except Exception as e:
+        print(f"Error running evaluation: {e}")
+        import traceback
+        traceback.print_exc()
+
 if __name__ == "__main__":
     asyncio.run(main())

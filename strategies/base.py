@@ -15,6 +15,20 @@ class CollaborationStrategy:
         """
         self.name = name
         self.benchmark_name = None
+
+        self.simple_bench_instructions = (
+            "\n\nIMPORTANT: This is a multiple-choice question from the SimpleBench dataset. "
+            "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
+            "one of the provided options (A, B, C, D, E, or F). For example, 'Final Answer: B'. "
+            "Do not include explanations after the final answer line."
+        )
+        self.gpqa_instructions = (
+                "\n\nIMPORTANT: This is a multiple-choice question from the Graduate-level Professional QA (GPQA) dataset. "
+                "The question requires expertise in a specialized domain. "
+                "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
+                "one of the provided options (A, B, C, D). For example, 'Final Answer: A'. "
+                "Do not include explanations after the final answer line."
+        )
         
         # Load configuration from file if provided
         if config_path and os.path.exists(config_path):
@@ -34,15 +48,14 @@ class CollaborationStrategy:
         
         # Add benchmark-specific instructions if needed
         if self.benchmark_name == "SimpleBench":
-            benchmark_instructions = (
-                "\n\nIMPORTANT: This is a multiple-choice question from the SimpleBench dataset. "
-                "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
-                "one of the provided options (A, B, C, D, E, or F). For example, 'Final Answer: B'. "
-                "Do not include explanations after the final answer line."
-            )
             return {
                 "role": "system",
-                "content": base_prompt["content"] + benchmark_instructions
+                "content": base_prompt["content"] + self.simple_bench_instructions
+            }
+        elif self.benchmark_name == "GPQA":
+            return {
+                "role": "system",
+                "content": base_prompt["content"] + self.gpqa_instructions
             }
         
         return base_prompt
@@ -53,15 +66,14 @@ class CollaborationStrategy:
         
         # Add benchmark-specific instructions if needed
         if self.benchmark_name == "SimpleBench":
-            benchmark_instructions = (
-                "\n\nIMPORTANT: This is a multiple-choice question from the SimpleBench dataset. Always pick the most realistic answer, taking into account real-world factors. "
-                "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
-                "one of the provided options (A, B, C, D, E, or F). For example, 'Final Answer: B'. "
-                "Do not include explanations after the final answer line."
-            )
             return {
                 "role": "system",
-                "content": base_prompt["content"] + benchmark_instructions
+                "content": base_prompt["content"] + self.simple_bench_instructions
+            }
+        elif self.benchmark_name == "GPQA":
+            return {
+                "role": "system",
+                "content": base_prompt["content"] + self.gpqa_instructions
             }
         
         return base_prompt
