@@ -107,36 +107,26 @@ class EvaluationManager:
                         "answer": sim_answer,
                         "correct": sim_correct,
                         "time": sim_time,
-                        "log_id": f"{log_id}_sim"
+                        "log_id": log_id  # Use the same log_id for both simulated and dual
                     },
                     "dual": {
                         "answer": dual_answer,
                         "correct": dual_correct,
                         "time": dual_time,
-                        "log_id": f"{log_id}_dual"
+                        "log_id": log_id  # Use the same log_id for both simulated and dual
                     }
                 }
                 
-                # Save individual conversation logs
-                sim_log_path = os.path.join(self.results_dir, f"log_{log_id}_sim.json")
-                with open(sim_log_path, 'w') as f:
+                # Save a consolidated log file with both simulated and dual messages
+                log_path = os.path.join(self.results_dir, f"log_{log_id}.json")
+                with open(log_path, 'w') as f:
                     json.dump({
                         "question_id": question['id'],
                         "question": question['question'],
                         "ground_truth": question['ground_truth'],
                         "strategy": strategy_id,
-                        "variant": "simulated",
-                        "simulated_messages": sim_messages
-                    }, f, indent=2)
-                    
-                dual_log_path = os.path.join(self.results_dir, f"log_{log_id}_dual.json")
-                with open(dual_log_path, 'w') as f:
-                    json.dump({
-                        "question_id": question['id'],
-                        "question": question['question'],
-                        "ground_truth": question['ground_truth'],
-                        "strategy": strategy_id,
-                        "variant": "dual",
+                        "benchmark": self.benchmark.name,
+                        "simulated_messages": sim_messages,
                         "dual_messages": dual_messages
                     }, f, indent=2)
                 

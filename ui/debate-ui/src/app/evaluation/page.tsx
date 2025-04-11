@@ -123,11 +123,7 @@ export default function EvaluationPage() {
       setSelectedConversation(null);
       
       // Run the evaluation
-      const { evaluation_id } = await runEvaluation({
-        benchmark_id: selectedBenchmark,
-        strategy_id: selectedStrategy,
-        max_questions: maxQuestions
-      });
+      const { evaluation_id } = await runEvaluation(selectedBenchmark, selectedStrategy, maxQuestions);
       
       setEvaluationId(evaluation_id);
       toast.success('Evaluation started!');

@@ -80,7 +80,9 @@ export function ConversationViewer({ logId }: ConversationViewerProps) {
   return (
     <Card className="bg-gray-900 border-gray-800">
       <CardHeader>
-        <CardTitle className="text-gray-100">Question {log.question_id}</CardTitle>
+        <CardTitle className="text-gray-100">
+          Question {log.question_id} - {log.benchmark}
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <div className="mb-4 p-4 bg-gray-800 rounded-md border border-gray-700">
@@ -106,13 +108,13 @@ export function ConversationViewer({ logId }: ConversationViewerProps) {
           
           <TabsContent value="simulated">
             <div className="space-y-4 mt-4">
-              {log.simulated_messages.map((msg, idx) => (
+              {log.simulated_messages && log.simulated_messages.map((msg, idx) => (
                 <AgentMessage 
                   key={idx} 
                   message={{
                     id: `sim-${idx}`,
-                    role: msg.agent || msg.role,
-                    content: msg.content,
+                    role: msg.agent! || msg.role! || (msg.original_role === 'assistant' ? 'Agent A' : msg.original_role)!,
+                    content: msg.content || msg.original_content || '',
                     timestamp: Date.now()
                   }} 
                 />
@@ -122,13 +124,13 @@ export function ConversationViewer({ logId }: ConversationViewerProps) {
           
           <TabsContent value="dual">
             <div className="space-y-4 mt-4">
-              {log.dual_messages.map((msg, idx) => (
+              {log.dual_messages && log.dual_messages.map((msg, idx) => (
                 <AgentMessage 
                   key={idx} 
                   message={{
                     id: `dual-${idx}`,
-                    role: msg.agent || msg.role,
-                    content: msg.content,
+                    role: msg.agent! || msg.role! || (msg.original_role === 'assistant' ? 'Agent A' : msg.original_role)!,
+                    content: msg.content || msg.original_content || '',
                     timestamp: Date.now()
                   }} 
                 />

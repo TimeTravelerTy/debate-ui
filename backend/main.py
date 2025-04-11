@@ -602,10 +602,40 @@ async def get_conversation_log(log_id: str):
         file_path = os.path.join(RESULTS_DIR, f"log_{log_id}.json")
         
         if not os.path.exists(file_path):
-            raise HTTPException(status_code=404, detail="Log not found")
+            # For backward compatibility, try the old format with _sim and _dual suffixes
+            sim_file_path = os.path.join(RESULTS_DIR, f"log_{log_id}_sim.json")
+            dual_file_path = os.path.join(RESULTS_DIR, f"log_{log_id}_dual.json")
+            
+            # If we find the old format files, merge them into a consolidated format
+            if os.path.exists(sim_file_path) and os.path.exists(dual_file_path):
+                with open(sim_file_path, 'r') as f:
+                    sim_data = json.load(f)
+                
+                with open(dual_file_path, 'r') as f:
+                    dual_data = json.load(f)
+                
+                # Create a consolidated response
+                consolidated_data = {
+                    "question_id": sim_data.get("question_id"),
+                    "question": sim_data.get("question"),
+                    "ground_truth": sim_data.get("ground_truth"),
+                    "strategy": sim_data.get("strategy"),
+                    "benchmark": sim_data.get("benchmark", "Unknown"),  # Add a default
+                    "simulated_messages": sim_data.get("simulated_messages", []),
+                    "dual_messages": dual_data.get("dual_messages", [])
+                }
+                
+                return consolidated_data
+            else:
+                raise HTTPException(status_code=404, detail="Log not found")
         
+        # New consolidated format
         with open(file_path, 'r') as f:
             data = json.load(f)
+        
+        # Ensure all required fields are present
+        if "simulated_messages" not in data or "dual_messages" not in data:
+            raise HTTPException(status_code=500, detail="Invalid log format")
         
         return data
     
