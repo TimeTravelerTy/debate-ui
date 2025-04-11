@@ -43,6 +43,17 @@ export function Navigation() {
               >
                 Benchmark Evaluation
               </Link>
+
+              <Link 
+                href="/evaluation/history" 
+                className={`text-sm font-medium transition-colors ${
+                  isActive('/evaluation/history') 
+                    ? 'text-white border-b-2 border-blue-500 py-1' 
+                    : 'text-gray-400 hover:text-gray-100'
+                }`}
+              >
+                Evaluation History
+              </Link>
             </nav>
             
             <ThemeToggle />
