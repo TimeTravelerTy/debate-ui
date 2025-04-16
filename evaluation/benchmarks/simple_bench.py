@@ -2,6 +2,7 @@ import json
 import re
 import os
 import pandas as pd
+import random
 from typing import Dict, List, Any, Optional, Tuple
 
 from .base import Benchmark
@@ -39,7 +40,7 @@ class SimpleBenchmark(Benchmark):
         # Load from JSON
         with open(self.json_path, 'r') as f:
             json_data = json.load(f)
-            self.data = {item["question_id"]: item for item in json_data["eval_data"]}
+            data = {item["question_id"]: item for item in json_data["eval_data"]}
             
         # Optionally enhance with CSV data if provided
         if self.csv_path and os.path.exists(self.csv_path):
@@ -48,7 +49,7 @@ class SimpleBenchmark(Benchmark):
                 # Map additional data from CSV to enhance JSON data
                 for _, row in df.iterrows():
                     q_id = int(row.get('id', 0))
-                    if q_id in self.data:
+                    if q_id in data:
                         # Add options data if available
                         options = {}
                         for i in range(1, 6):  # Options 1-5
@@ -57,12 +58,12 @@ class SimpleBenchmark(Benchmark):
                                 options[f'option{i}'] = row[option_key]
                         
                         if options:
-                            self.data[q_id]['options'] = options
+                            data[q_id]['options'] = options
             except Exception as e:
                 print(f"Error loading CSV data: {e}")
                 # Continue with just the JSON data
         
-        return self.data
+        return data
     
     def evaluate_response(self, question_id: int, response: str) -> Dict[str, Any]:
         """
@@ -99,6 +100,23 @@ class SimpleBenchmark(Benchmark):
             "ground_truth": ground_truth,
             "extracted_answer": extracted_answer
         }
+    
+    def evaluate_answer(self, answer: str, ground_truth: str) -> bool:
+        """
+        Evaluate if an answer is correct
+        
+        Args:
+            answer: The answer to evaluate
+            ground_truth: The ground truth answer
+            
+        Returns:
+            Boolean indicating if the answer is correct
+        """
+        extracted_answer = self._extract_answer_letter(answer)
+        if not extracted_answer:
+            return False
+            
+        return extracted_answer.upper() == ground_truth.upper()
         
     def _extract_answer_letter(self, response: str) -> Optional[str]:
         """Extract the answer letter (A-F) from the response, handling various formats"""

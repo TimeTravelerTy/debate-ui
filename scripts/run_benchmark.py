@@ -37,7 +37,7 @@ parser.add_argument('--benchmark', type=str, required=True,
 parser.add_argument('--strategy', type=str, default='debate', 
                     choices=['debate', 'cooperative', 'teacher-student'],
                     help='Strategy to use for the evaluation')
-parser.add_argument('--questions', type=int, default=5,
+parser.add_argument('--questions', type=int, default=None,
                     help='Number of questions to evaluate')
 parser.add_argument('--results-dir', type=str, default='./results',
                     help='Directory to save results')

@@ -3,8 +3,10 @@ import json
 import os
 import pandas as pd
 import random
+import re
+from .base import Benchmark
 
-class GPQABenchmark:
+class GPQABenchmark(Benchmark):
     """Implementation of the GPQA benchmark"""
     
     def __init__(self, csv_path: str, variant: str = "diamond", subset_size: Optional[int] = None):
@@ -16,13 +18,15 @@ class GPQABenchmark:
             variant: Which GPQA variant to use ('diamond', 'experts', 'extended', 'main')
             subset_size: Number of questions to use (optional, if None use all)
         """
-        self.name = "GPQA"
+        super().__init__(name="GPQA", description=f"GPQA benchmark - {variant} variant")
         self.variant = variant
         self.csv_path = csv_path
         
         # Load the GPQA dataset
-        self.data = self._load_data(csv_path, subset_size)
-        
+        # Convert list of question dicts to dict with question ID as key
+        questions_list = self._load_data(csv_path, subset_size)
+        self.data = {q['id']: q for q in questions_list}
+    
     def _load_data(self, csv_path: str, subset_size: Optional[int]) -> List[Dict[str, Any]]:
         """
         Load data from the CSV file
@@ -77,7 +81,6 @@ class GPQABenchmark:
                 all_options = [opt for opt in all_options if pd.notna(opt) and str(opt).strip()]
                 
                 # Shuffle the options to randomize which one is correct
-                import random
                 random.shuffle(all_options)
                 
                 # Convert to labeled options (A, B, C, D)
@@ -140,21 +143,6 @@ class GPQABenchmark:
             traceback.print_exc()
             return []
     
-    def get_questions(self, max_questions: Optional[int] = None) -> List[Dict[str, Any]]:
-        """
-        Get questions from the dataset
-        
-        Args:
-            max_questions: Maximum number of questions to return (if None, return all)
-            
-        Returns:
-            List of question dictionaries
-        """
-        if max_questions is not None and max_questions < len(self.data):
-            return self.data[:max_questions]
-        else:
-            return self.data.copy()
-    
     def evaluate_answer(self, answer: str, ground_truth: str) -> bool:
         """
         Evaluate if an answer is correct
@@ -167,7 +155,6 @@ class GPQABenchmark:
             Boolean indicating if the answer is correct
         """
         # Extract the model's answer choice (A, B, C, or D)
-        import re
         
         # First try to find "Final Answer: X" pattern
         final_answer_match = re.search(r"Final Answer:\s*([A-D])", answer, re.IGNORECASE)

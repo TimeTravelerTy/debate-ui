@@ -49,12 +49,11 @@ class AgentFramework:
                 "collaborating on solving the given problem. Your task is to alternate between these two agents' perspectives. "
                 "Each time you see '(next turn)', switch to the other agent's role. "
                 "IMPORTANT: For each response, start with either 'Agent A:' or 'Agent B:' to indicate which agent is speaking. "
-                "Your responses should be thoughtful and focused on logical reasoning. "
                 "DO NOT include '(next turn)' in your response as this is just a prompt for you to switch roles. DO NOT switch roles mid-response. "
                 f"Agent A should take the position described as: \"{self.strategy.get_system_prompt_a()['content']}\", while "
                 f"Agent B should act as: \"{self.strategy.get_system_prompt_b()['content']}\". "
                 "When you see '(final turn)', provide your final conclusion. In this final turn, "
-                "Agent A should provide a final statement that starts with 'Final Answer:' the solution based on the entire discussion."
+                "the designated agent should provide a final statement that starts with 'Final Answer:' the solution based on the entire discussion."
             )
         }
         

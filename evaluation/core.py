@@ -60,36 +60,48 @@ class EvaluationManager:
         total_simulated_correct = 0
         total_dual_correct = 0
         
-        for i, question in enumerate(questions):
-            print(f"\nQuestion {i+1}/{len(questions)} - ID: {question['id']}")
+        # Convert dict to list if needed (SimpleBenchmark returns dict, GPQA returns list)
+        questions_list = []
+        if isinstance(questions, dict):
+            for q_id, q_data in questions.items():
+                q_data['id'] = q_id  # Ensure id is included if not already
+                questions_list.append(q_data)
+        else:
+            questions_list = questions
+        
+        for i, question in enumerate(questions_list):
+            print(f"\nQuestion {i+1}/{len(questions_list)} - ID: {question['id']}")
             
             # Create a unique log ID for this question
             log_id = f"{self.benchmark.name.lower()}_{question['id']}_{int(time.time())}"
             
             try:
-                # Run simulated debate
-                print("Running simulated debate...")
+                question_text = question.get('question', question.get('question_text', question.get('prompt', '')))
+                # Run simulated and dual agent debates concurrently
+                print("Running both simulated and dual agent debates...")
                 sim_start_time = time.time()
-                sim_messages = await self.framework.run_simulation(question['question'])
-                sim_end_time = time.time()
-                
-                # Extract final answer from simulated debate
-                sim_answer = self.framework.extract_final_answer(sim_messages)
-                sim_time = sim_end_time - sim_start_time
-                
-                # Run dual agent debate
-                print("Running dual agent debate...")
+                sim_task = self.framework.run_simulation(question_text)
                 dual_start_time = time.time()
-                dual_messages = await self.framework.run_dual_agent(question['question'])
+                dual_task = self.framework.run_dual_agent(question_text)
+
+                # Wait for both to complete
+                sim_messages, dual_messages = await asyncio.gather(sim_task, dual_task)
+
+                sim_end_time = time.time()
                 dual_end_time = time.time()
-                
-                # Extract final answer from dual agent debate
+
+                # Extract final answers
+                sim_answer = self.framework.extract_final_answer(sim_messages)
                 dual_answer = self.framework.extract_final_answer(dual_messages)
+                sim_time = sim_end_time - sim_start_time
                 dual_time = dual_end_time - dual_start_time
                 
-                # Evaluate correctness
-                sim_correct = self.benchmark.evaluate_answer(sim_answer, question['ground_truth'])
-                dual_correct = self.benchmark.evaluate_answer(dual_answer, question['ground_truth'])
+                # Get ground truth from question data
+                ground_truth = question.get('ground_truth', question.get('answer', ''))
+                
+                # Evaluate correctness - use benchmark's evaluate_answer method
+                sim_correct = self.benchmark.evaluate_answer(sim_answer, ground_truth)
+                dual_correct = self.benchmark.evaluate_answer(dual_answer, ground_truth)
                 
                 if sim_correct:
                     total_simulated_correct += 1
@@ -99,8 +111,8 @@ class EvaluationManager:
                 # Create result entry
                 result = {
                     "question_id": question['id'],
-                    "question": question['question'],
-                    "ground_truth": question['ground_truth'],
+                    "question": question.get('question', question.get('question_text', question.get('prompt', ''))),
+                    "ground_truth": ground_truth,
                     "category": question.get('category', 'unknown'),
                     "difficulty": question.get('difficulty', 'unknown'),
                     "simulated": {
@@ -122,8 +134,8 @@ class EvaluationManager:
                 with open(log_path, 'w') as f:
                     json.dump({
                         "question_id": question['id'],
-                        "question": question['question'],
-                        "ground_truth": question['ground_truth'],
+                        "question": question.get('question', question.get('question_text', question.get('prompt', ''))),
+                        "ground_truth": ground_truth,
                         "strategy": strategy_id,
                         "benchmark": self.benchmark.name,
                         "simulated_messages": sim_messages,
@@ -134,7 +146,7 @@ class EvaluationManager:
                 
                 # Print progress
                 print(f"Question: {question['id']}")
-                print(f"Ground Truth: {question['ground_truth']}")
+                print(f"Ground Truth: {ground_truth}")
                 print(f"Simulated Answer: {sim_answer} - {'✓' if sim_correct else '✗'} ({sim_time:.2f}s)")
                 print(f"Dual Agent Answer: {dual_answer} - {'✓' if dual_correct else '✗'} ({dual_time:.2f}s)")
                 
@@ -144,7 +156,7 @@ class EvaluationManager:
                 traceback.print_exc()
         
         # Calculate summary
-        total_questions = len(questions)
+        total_questions = len(questions_list)
         simulated_accuracy = total_simulated_correct / total_questions if total_questions > 0 else 0
         dual_accuracy = total_dual_correct / total_questions if total_questions > 0 else 0
         

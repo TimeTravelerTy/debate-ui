@@ -39,15 +39,24 @@ class Benchmark:
         """
         raise NotImplementedError("Subclasses must implement evaluate_response")
         
-    def get_questions(self) -> Dict[int, Dict[str, Any]]:
+    def get_questions(self, max_questions: Optional[int] = None) -> Dict[int, Dict[str, Any]]:
         """
-        Return all questions in the benchmark
+        Return questions in the benchmark, optionally limited to max_questions
         
+        Args:
+            max_questions: Optional maximum number of questions to return
+            
         Returns:
             Dictionary mapping question IDs to question data
         """
         if self.data is None:
             self.data = self.load_data()
+            
+        if max_questions is not None and max_questions < len(self.data):
+            # Convert to list of tuples, slice, and convert back to dict
+            items = list(self.data.items())[:max_questions]
+            return dict(items)
+        
         return self.data
 
     def get_question(self, question_id: int) -> Optional[Dict[str, Any]]:
@@ -64,3 +73,18 @@ class Benchmark:
             self.data = self.load_data()
             
         return self.data.get(question_id)
+        
+    def evaluate_answer(self, answer: str, ground_truth: str) -> bool:
+        """
+        Default method to evaluate if an answer is correct.
+        Subclasses should override this method if they need custom evaluation logic.
+        
+        Args:
+            answer: The answer to evaluate
+            ground_truth: The ground truth answer
+            
+        Returns:
+            Boolean indicating if the answer is correct
+        """
+        # Default implementation - simple string comparison
+        return answer.strip().upper() == ground_truth.strip().upper()
