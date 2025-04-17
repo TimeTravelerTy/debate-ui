@@ -11,11 +11,11 @@ import time
 from datetime import datetime
 from dotenv import load_dotenv
 
-# Add the parent directory to the Python path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-
 # Load environment variables
 load_dotenv()
+
+# Add the parent directory to the Python path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # Import agent framework modules
 from agent.framework import AgentFramework
@@ -49,6 +49,10 @@ parser.add_argument('--base-url', type=str, default=None,
                     help='Base URL for the API (or use API_BASE_URL env var)')
 parser.add_argument('--model', type=str, default=None,
                     help='Model name to use (or use MODEL_NAME env var)')
+parser.add_argument('--analyze', action='store_true',
+                    help='Analyze existing results without running evaluations')
+parser.add_argument('--result-file', type=str, default=None,
+                    help='Result file to analyze (with --analyze flag)')
 
 async def main():
     """Run the benchmark evaluation"""

@@ -77,24 +77,26 @@ class EvaluationManager:
             
             try:
                 question_text = question.get('question', question.get('question_text', question.get('prompt', '')))
-                # Run simulated and dual agent debates concurrently
+                # Get question_id for alternating final answerer - convert to int if it's not already
+                question_id = int(question['id']) if isinstance(question['id'], str) else question['id']
+                
+                # Run simulated and dual agent debates concurrently, passing the question_id
                 print("Running both simulated and dual agent debates...")
-                sim_start_time = time.time()
-                sim_task = self.framework.run_simulation(question_text)
-                dual_start_time = time.time()
-                dual_task = self.framework.run_dual_agent(question_text)
+                
+                # The run_simulation and run_dual_agent methods now return (messages, time) tuples
+                sim_task = self.framework.run_simulation(question_text, question_id=question_id)
+                dual_task = self.framework.run_dual_agent(question_text, question_id=question_id)
 
-                # Wait for both to complete
-                sim_messages, dual_messages = await asyncio.gather(sim_task, dual_task)
-
-                sim_end_time = time.time()
-                dual_end_time = time.time()
+                # Wait for both to complete - each result will be a (messages, time) tuple
+                sim_result, dual_result = await asyncio.gather(sim_task, dual_task)
+                
+                # Unpack the results
+                sim_messages, sim_time = sim_result
+                dual_messages, dual_time = dual_result
 
                 # Extract final answers
                 sim_answer = self.framework.extract_final_answer(sim_messages)
                 dual_answer = self.framework.extract_final_answer(dual_messages)
-                sim_time = sim_end_time - sim_start_time
-                dual_time = dual_end_time - dual_start_time
                 
                 # Get ground truth from question data
                 ground_truth = question.get('ground_truth', question.get('answer', ''))

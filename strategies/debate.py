@@ -29,8 +29,7 @@ class DebateStrategy(CollaborationStrategy):
                 "counterarguments. Engage thoughtfully with critiques from Agent B, either by defending your "
                 "original position with additional reasoning or by refining your answer based on valid criticisms. "
                 "Remember that your goal is not to 'win' but to collaboratively reach the most accurate solution. "
-                "Only when you see a prompt indicating the final turn, conclude with 'Final Answer:' followed by the best solution "
-                "based on the entire discussion."
+                "Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
             )
         }
     
@@ -51,5 +50,6 @@ class DebateStrategy(CollaborationStrategy):
                 "ensure that the final solution is robust and accounts for all relevant factors. Be constructive "
                 "in your criticism, suggesting improvements rather than merely pointing out flaws. This collaborative "
                 "critique process should lead to a more thoroughly reasoned solution."
+                "Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
             )
         }

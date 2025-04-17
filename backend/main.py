@@ -284,6 +284,11 @@ async def run_debate(debate_id: str, problem: str, strategy_name: str):
         await add_message(debate_id, 'System', system_prompt_a['content'], 'dual')
         await add_message(debate_id, 'System', system_prompt_b['content'], 'dual')
         
+        # Generate a question_id based on the debate_id to determine final answerer
+        # Use a hash of the debate_id to generate a consistent random-like number
+        import hashlib
+        question_id = int(hashlib.md5(debate_id.encode()).hexdigest(), 16) % 100  # Use modulo 100 to get a reasonable number
+        
         # Define callback functions to handle messages in real-time
         async def simulated_callback(role, content, msg_type):
             await add_message(debate_id, role, content, 'simulated')
@@ -292,16 +297,24 @@ async def run_debate(debate_id: str, problem: str, strategy_name: str):
             await add_message(debate_id, role, content, 'dual')
         
         # Run simulated debate and dual agent debate concurrently using asyncio
+        # The frameworks now return a tuple of (messages, time), but we only need messages for the API
         sim_task = asyncio.create_task(
-            framework.run_simulation(problem, simulated_callback)
+            framework.run_simulation(problem, simulated_callback, question_id=question_id)
         )
         
         dual_task = asyncio.create_task(
-            framework.run_dual_agent(problem, dual_agent_callback)
+            framework.run_dual_agent(problem, dual_agent_callback, question_id=question_id)
         )
         
         # Wait for both tasks to complete
-        await asyncio.gather(sim_task, dual_task)
+        sim_result, dual_result = await asyncio.gather(sim_task, dual_task)
+        
+        # Extract timing information for logging (optional)
+        sim_messages, sim_time = sim_result
+        dual_messages, dual_time = dual_result
+        
+        print(f"Simulated debate completed in {sim_time:.2f} seconds")
+        print(f"Dual-agent debate completed in {dual_time:.2f} seconds")
         
         # Mark as complete
         if debate_id in active_debates:
@@ -330,7 +343,7 @@ async def run_debate(debate_id: str, problem: str, strategy_name: str):
                     'error': str(e),
                     'messages': []
                 })
-
+                          
 async def add_message(debate_id, role, content, message_type):
     """Add a message to the debate and notify listeners"""
     if debate_id not in active_debates:
