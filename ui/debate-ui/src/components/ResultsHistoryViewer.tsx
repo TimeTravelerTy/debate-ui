@@ -5,6 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Loader2, FileText, BarChart, ArrowLeft } from "lucide-react";
 import { ConversationViewer } from "./evaluation/ConversationViewer";
 import { ResultsTable } from "./evaluation/ResultsTable";
+import { EvolutionSummaryView } from "./evaluation/EvolutionSummaryView";
 import { 
   getEvaluationRuns,
   getEvaluationResults,
@@ -13,6 +14,142 @@ import {
   ResultsSummary,
   EvaluationResultResponse
 } from "@/app/api/evaluation";
+
+// Function to generate evolution summary from results
+function generateEvolutionSummary(results: BenchmarkResult[]) {
+  // Define types for pattern keys
+  type AgreementPattern = "Complete Agreement" | "Resolved Disagreement" | "Unresolved Disagreement" | "Insufficient Data";
+  type CorrectnessPattern = "Stable Correct" | "Stable Incorrect" | "Stable Correct (One Agent)" | "Improvement" | "Deterioration" | "Mixed Pattern" | "Mixed Pattern (Final Correct)" | "Insufficient Data";
+  
+  // Initialize counters with proper typing
+  const agreement_counts: Record<AgreementPattern, number> = {
+    "Complete Agreement": 0,
+    "Resolved Disagreement": 0,
+    "Unresolved Disagreement": 0,
+    "Insufficient Data": 0
+  };
+  
+  const correctness_counts: Record<CorrectnessPattern, number> = {
+    "Stable Correct": 0,
+    "Stable Incorrect": 0,
+    "Stable Correct (One Agent)": 0,
+    "Improvement": 0,
+    "Deterioration": 0,
+    "Mixed Pattern": 0,
+    "Mixed Pattern (Final Correct)": 0,
+    "Insufficient Data": 0
+  };
+  
+  const simulated_agreement: Record<AgreementPattern, number> = {
+    "Complete Agreement": 0,
+    "Resolved Disagreement": 0,
+    "Unresolved Disagreement": 0,
+    "Insufficient Data": 0
+  };
+  
+  const simulated_correctness: Record<CorrectnessPattern, number> = {
+    "Stable Correct": 0,
+    "Stable Incorrect": 0,
+    "Stable Correct (One Agent)": 0,
+    "Improvement": 0,
+    "Deterioration": 0,
+    "Mixed Pattern": 0,
+    "Mixed Pattern (Final Correct)": 0,
+    "Insufficient Data": 0
+  };
+  
+  const dual_agreement: Record<AgreementPattern, number> = {
+    "Complete Agreement": 0,
+    "Resolved Disagreement": 0,
+    "Unresolved Disagreement": 0,
+    "Insufficient Data": 0
+  };
+  
+  const dual_correctness: Record<CorrectnessPattern, number> = {
+    "Stable Correct": 0,
+    "Stable Incorrect": 0,
+    "Stable Correct (One Agent)": 0,
+    "Improvement": 0,
+    "Deterioration": 0,
+    "Mixed Pattern": 0,
+    "Mixed Pattern (Final Correct)": 0,
+    "Insufficient Data": 0
+  };
+  
+  // Process each result
+  results.forEach(result => {
+    // Process simulated evolution data
+    if (result.simulated && result.simulated.evolution) {
+      const simAgreement = result.simulated.evolution.agreement_pattern;
+      const simCorrectness = result.simulated.evolution.correctness_pattern;
+      
+      // Update counts with proper type checking
+      if (simAgreement && 
+          (simAgreement === "Complete Agreement" || 
+           simAgreement === "Resolved Disagreement" || 
+           simAgreement === "Unresolved Disagreement" || 
+           simAgreement === "Insufficient Data")) {
+        agreement_counts[simAgreement]++;
+        simulated_agreement[simAgreement]++;
+      }
+      
+      if (simCorrectness && 
+          (simCorrectness === "Stable Correct" || 
+           simCorrectness === "Stable Incorrect" || 
+           simCorrectness === "Stable Correct (One Agent)" || 
+           simCorrectness === "Improvement" || 
+           simCorrectness === "Deterioration" || 
+           simCorrectness === "Mixed Pattern" || 
+           simCorrectness === "Mixed Pattern (Final Correct)" || 
+           simCorrectness === "Insufficient Data")) {
+        correctness_counts[simCorrectness]++;
+        simulated_correctness[simCorrectness]++;
+      }
+    }
+    
+    // Process dual evolution data
+    if (result.dual && result.dual.evolution) {
+      const dualAgreement = result.dual.evolution.agreement_pattern;
+      const dualCorrectness = result.dual.evolution.correctness_pattern;
+      
+      // Update counts with proper type checking
+      if (dualAgreement && 
+          (dualAgreement === "Complete Agreement" || 
+           dualAgreement === "Resolved Disagreement" || 
+           dualAgreement === "Unresolved Disagreement" || 
+           dualAgreement === "Insufficient Data")) {
+        agreement_counts[dualAgreement]++;
+        dual_agreement[dualAgreement]++;
+      }
+      
+      if (dualCorrectness && 
+          (dualCorrectness === "Stable Correct" || 
+           dualCorrectness === "Stable Incorrect" || 
+           dualCorrectness === "Stable Correct (One Agent)" || 
+           dualCorrectness === "Improvement" || 
+           dualCorrectness === "Deterioration" || 
+           dualCorrectness === "Mixed Pattern" || 
+           dualCorrectness === "Mixed Pattern (Final Correct)" || 
+           dualCorrectness === "Insufficient Data")) {
+        correctness_counts[dualCorrectness]++;
+        dual_correctness[dualCorrectness]++;
+      }
+    }
+  });
+  
+  return {
+    agreement_counts,
+    correctness_counts,
+    simulated: {
+      agreement: simulated_agreement,
+      correctness: simulated_correctness
+    },
+    dual: {
+      agreement: dual_agreement,
+      correctness: dual_correctness
+    }
+  };
+}
 
 // Table components (copied from ui/table.tsx to avoid import issues)
 const Table = React.forwardRef<
@@ -88,11 +225,24 @@ TableCell.displayName = "TableCell";
 export function ResultsHistoryViewer() {
   // View states
   const [view, setView] = useState<'list' | 'details' | 'conversation'>('list');
+  const [detailsTab, setDetailsTab] = useState<'results' | 'evolution'>('results');
   
   // Data states
   const [runs, setRuns] = useState<{ id: string; strategy: string; timestamp: string; benchmark: string }[]>([]);
   const [selectedRun, setSelectedRun] = useState<EvaluationResultResponse | null>(null);
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [evolutionSummary, setEvolutionSummary] = useState<{
+    agreement_counts: Record<string, number>;
+    correctness_counts: Record<string, number>;
+    simulated: {
+      agreement: Record<string, number>;
+      correctness: Record<string, number>;
+    };
+    dual: {
+      agreement: Record<string, number>;
+      correctness: Record<string, number>;
+    };
+  } | null>(null);
   
   // Loading states
   const [loading, setLoading] = useState(false);
@@ -127,7 +277,13 @@ export function ResultsHistoryViewer() {
     try {
       const data = await getEvaluationResults(runId);
       setSelectedRun(data);
+      
+      // Generate evolution summary
+      const summary = generateEvolutionSummary(data.results);
+      setEvolutionSummary(summary);
+      
       setView('details');
+      setDetailsTab('results'); // Default to results tab
     } catch (err) {
       console.error('Error fetching run details:', err);
       setError(err instanceof Error ? err.message : 'Failed to load run details');
@@ -148,6 +304,7 @@ export function ResultsHistoryViewer() {
       setView('details');
     } else if (view === 'details') {
       setSelectedRun(null);
+      setEvolutionSummary(null);
       setView('list');
     }
   };
@@ -271,11 +428,42 @@ export function ResultsHistoryViewer() {
           </div>
         </div>
         
-        <ResultsTable 
-          results={selectedRun.results}
-          summary={selectedRun.summary}
-          onSelectConversation={handleViewConversation}
-        />
+        <Tabs value={detailsTab} onValueChange={(value) => setDetailsTab(value as 'results' | 'evolution')}>
+          <TabsList className="bg-gray-800 border-gray-700">
+            <TabsTrigger 
+              value="results" 
+              className="data-[state=active]:bg-gray-700 text-gray-300"
+            >
+              Results Table
+            </TabsTrigger>
+            <TabsTrigger 
+              value="evolution" 
+              className="data-[state=active]:bg-gray-700 text-gray-300"
+            >
+              Evolution Analysis
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="results">
+            <ResultsTable 
+              results={selectedRun.results}
+              summary={selectedRun.summary}
+              onSelectConversation={handleViewConversation}
+            />
+          </TabsContent>
+          
+          <TabsContent value="evolution">
+            {evolutionSummary ? (
+              <EvolutionSummaryView summaryData={evolutionSummary} />
+            ) : (
+              <Card className="bg-gray-900 border-gray-800">
+                <CardContent className="p-6 text-center text-gray-400">
+                  No evolution analysis data available for this run
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     );
   }

@@ -11,6 +11,7 @@ import sys
 from threading import Thread
 import json
 from dotenv import load_dotenv
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from agent.client import APIClient
 from datetime import datetime
 from evaluation.core import EvaluationManager

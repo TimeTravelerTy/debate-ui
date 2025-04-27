@@ -6,6 +6,7 @@ import os
 import asyncio
 import time
 from datetime import datetime
+from .solution_evolution import analyze_solution_evolution
 
 class EvaluationManager:
     """Manager for running benchmark evaluations"""
@@ -78,7 +79,7 @@ class EvaluationManager:
             try:
                 question_text = question.get('question', question.get('question_text', question.get('prompt', '')))
                 # Get question_id for alternating final answerer - convert to int if it's not already
-                question_id = int(question['id']) if isinstance(question['id'], str) else question['id']
+                question_id = i
                 
                 # Run simulated and dual agent debates concurrently, passing the question_id
                 print("Running both simulated and dual agent debates...")
@@ -110,47 +111,107 @@ class EvaluationManager:
                 if dual_correct:
                     total_dual_correct += 1
                 
-                # Create result entry
-                result = {
-                    "question_id": question['id'],
-                    "question": question.get('question', question.get('question_text', question.get('prompt', ''))),
-                    "ground_truth": ground_truth,
-                    "category": question.get('category', 'unknown'),
-                    "difficulty": question.get('difficulty', 'unknown'),
-                    "simulated": {
-                        "answer": sim_answer,
-                        "correct": sim_correct,
-                        "time": sim_time,
-                        "log_id": log_id  # Use the same log_id for both simulated and dual
-                    },
-                    "dual": {
-                        "answer": dual_answer,
-                        "correct": dual_correct,
-                        "time": dual_time,
-                        "log_id": log_id  # Use the same log_id for both simulated and dual
-                    }
-                }
-                
-                # Save a consolidated log file with both simulated and dual messages
-                log_path = os.path.join(self.results_dir, f"log_{log_id}.json")
-                with open(log_path, 'w') as f:
-                    json.dump({
+                 # NEW CODE: Perform solution evolution analysis
+                try:
+                    # Analyze how solutions evolved in both approaches
+                    sim_evolution = analyze_solution_evolution(sim_messages, ground_truth, self.benchmark)
+                    dual_evolution = analyze_solution_evolution(dual_messages, ground_truth, self.benchmark)
+                    
+                    # Create result entry with evolution analysis
+                    result = {
                         "question_id": question['id'],
                         "question": question.get('question', question.get('question_text', question.get('prompt', ''))),
                         "ground_truth": ground_truth,
-                        "strategy": strategy_id,
-                        "benchmark": self.benchmark.name,
-                        "simulated_messages": sim_messages,
-                        "dual_messages": dual_messages
-                    }, f, indent=2)
+                        "category": question.get('category', 'unknown'),
+                        "difficulty": question.get('difficulty', 'unknown'),
+                        "simulated": {
+                            "answer": sim_answer,
+                            "correct": sim_correct,
+                            "time": sim_time,
+                            "log_id": log_id,
+                            "evolution": {
+                                "agreement_pattern": sim_evolution["agreement_pattern"],
+                                "correctness_pattern": sim_evolution["correctness_pattern"]
+                            }
+                        },
+                        "dual": {
+                            "answer": dual_answer,
+                            "correct": dual_correct,
+                            "time": dual_time,
+                            "log_id": log_id,
+                            "evolution": {
+                                "agreement_pattern": dual_evolution["agreement_pattern"],
+                                "correctness_pattern": dual_evolution["correctness_pattern"]
+                            }
+                        }
+                    }
+                except Exception as e:
+                    print(f"Error in solution evolution analysis: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    
+                    # Fallback to simple result without evolution analysis
+                    result = {
+                        "question_id": question['id'],
+                        "question": question.get('question', question.get('question_text', question.get('prompt', ''))),
+                        "ground_truth": ground_truth,
+                        "category": question.get('category', 'unknown'),
+                        "difficulty": question.get('difficulty', 'unknown'),
+                        "simulated": {
+                            "answer": sim_answer,
+                            "correct": sim_correct,
+                            "time": sim_time,
+                            "log_id": log_id
+                        },
+                        "dual": {
+                            "answer": dual_answer,
+                            "correct": dual_correct,
+                            "time": dual_time,
+                            "log_id": log_id
+                        }
+                    }
+                
+                # Save a consolidated log file with both simulated and dual messages
+                # Add the solution evolution analysis to the log
+                log_path = os.path.join(self.results_dir, f"log_{log_id}.json")
+                with open(log_path, 'w') as f:
+                    try:
+                        json.dump({
+                            "question_id": question['id'],
+                            "question": question.get('question', question.get('question_text', question.get('prompt', ''))),
+                            "ground_truth": ground_truth,
+                            "strategy": strategy_id,
+                            "benchmark": self.benchmark.name,
+                            "simulated_messages": sim_messages,
+                            "dual_messages": dual_messages,
+                            "simulated_evolution": sim_evolution,
+                            "dual_evolution": dual_evolution
+                        }, f, indent=2)
+                    except Exception as e:
+                        print(f"Error saving evolution analysis to log: {e}")
+                        # Fallback to saving without evolution analysis
+                        json.dump({
+                            "question_id": question['id'],
+                            "question": question.get('question', question.get('question_text', question.get('prompt', ''))),
+                            "ground_truth": ground_truth,
+                            "strategy": strategy_id,
+                            "benchmark": self.benchmark.name,
+                            "simulated_messages": sim_messages,
+                            "dual_messages": dual_messages
+                        }, f, indent=2)
                 
                 results.append(result)
                 
-                # Print progress
+                # Print progress with evolution analysis
                 print(f"Question: {question['id']}")
                 print(f"Ground Truth: {ground_truth}")
                 print(f"Simulated Answer: {sim_answer} - {'✓' if sim_correct else '✗'} ({sim_time:.2f}s)")
                 print(f"Dual Agent Answer: {dual_answer} - {'✓' if dual_correct else '✗'} ({dual_time:.2f}s)")
+                try:
+                    print(f"Simulated Evolution: {sim_evolution['agreement_pattern']} / {sim_evolution['correctness_pattern']}")
+                    print(f"Dual Evolution: {dual_evolution['agreement_pattern']} / {dual_evolution['correctness_pattern']}")
+                except:
+                    pass
                 
             except Exception as e:
                 print(f"Error processing question {question['id']}: {e}")

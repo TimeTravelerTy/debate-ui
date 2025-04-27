@@ -58,7 +58,7 @@ class AgentFramework:
             "content": (
                 "You are a reasoning agent who will simulate a structured interaction between two agents—Agent A and Agent B—who are "
                 "collaborating on solving the given problem. Your task is to alternate between these two agents' perspectives. "
-                "Each time you see '(next turn)', switch to the other agent's role. "
+                "Each time and only when you see '(next turn)', switch to the other agent's role. "
                 "IMPORTANT: For each response, start with either 'Agent A:' or 'Agent B:' to indicate which agent is speaking. "
                 "DO NOT include '(next turn)' in your response as this is just a prompt for you to switch roles. DO NOT switch roles mid-response. "
                 f"Agent A should take the position described as: \"{self.strategy.get_system_prompt_a()['content']}\", while "
