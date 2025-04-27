@@ -39,7 +39,7 @@ class AgentFramework:
             user_prompt: The problem to solve
             message_callback: Optional callback function to receive messages in real-time
             question_id: Optional question ID to determine final answerer
-            
+                
         Returns:
             Tuple of (list of message dictionaries, execution_time_in_seconds)
         """
@@ -58,9 +58,11 @@ class AgentFramework:
             "content": (
                 "You are a reasoning agent who will simulate a structured interaction between two agents—Agent A and Agent B—who are "
                 "collaborating on solving the given problem. Your task is to alternate between these two agents' perspectives. "
-                "Each time and only when you see '(next turn)', switch to the other agent's role. "
+                "Each time you see '(next turn)', switch to the other agent's role. "
                 "IMPORTANT: For each response, start with either 'Agent A:' or 'Agent B:' to indicate which agent is speaking. "
-                "DO NOT include '(next turn)' in your response as this is just a prompt for you to switch roles. DO NOT switch roles mid-response. "
+                "DO NOT include '(next turn)' in your response as this is just a prompt for you to switch roles. "
+                "DO NOT switch roles mid-response. Each of your responses must be from ONE agent only. "
+                "DO NOT simulate how the other agent would respond - wait for the next turn to do that. "
                 f"Agent A should take the position described as: \"{self.strategy.get_system_prompt_a()['content']}\", while "
                 f"Agent B should act as: \"{self.strategy.get_system_prompt_b()['content']}\". "
                 f"When you see '(final turn)', {final_agent} should provide the final conclusion. In this final turn, "
@@ -86,11 +88,11 @@ class AgentFramework:
             
             # Prompt the model to respond as the current role
             if turn == 0:
-                next_prompt = f"Please respond as {role}:"
+                next_prompt = f"Please respond as {role}. Remember to only respond as {role}, not both agents:"
             elif turn == num_turns - 1:  # If this is the final turn
-                next_prompt = "(final turn)"
+                next_prompt = f"(final turn) This is the final turn. Only {final_agent} should respond with the final answer."
             else:
-                next_prompt = "(next turn)"
+                next_prompt = f"(next turn) Now respond as {role}. Remember to only respond as {role}, not both agents:"
             
             # Call the API for the current turn (using await with the async client)
             response = await self.client.call_api_async(
@@ -102,18 +104,21 @@ class AgentFramework:
             # Clean up any "(next turn)" or "(final turn)" that might have been included in the response
             response = response.replace("(next turn)", "").replace("(final turn)", "")
             
-            # Add the response to the message history
-            messages.append({"role": "assistant", "content": response})
+            # Check for and fix role-switching within the response
+            processed_response = self._process_simulation_response(response, role)
+            
+            # Add the processed response to the message history
+            messages.append({"role": "assistant", "content": processed_response})
             
             # Extract the actual agent prefix if present
             agent_role = role
-            agent_content = response
-            if response.startswith("Agent A:"):
+            agent_content = processed_response
+            if processed_response.startswith("Agent A:"):
                 agent_role = "Agent A"
-                agent_content = response[len("Agent A:"):].strip()
-            elif response.startswith("Agent B:"):
+                agent_content = processed_response[len("Agent A:"):].strip()
+            elif processed_response.startswith("Agent B:"):
                 agent_role = "Agent B"
-                agent_content = response[len("Agent B:"):].strip()
+                agent_content = processed_response[len("Agent B:"):].strip()
             
             # Create a message entry
             message_entry = {
@@ -161,6 +166,54 @@ class AgentFramework:
         execution_time = time.time() - start_time
         
         return result_messages, execution_time
+
+    def _process_simulation_response(self, response: str, expected_role: str) -> str:
+        """
+        Process simulation response to handle cases where the model switches roles mid-response
+        
+        Args:
+            response: The raw response from the model
+            expected_role: The role that was expected to respond
+            
+        Returns:
+            Processed response with only the expected role's content
+        """
+        # If the response doesn't start with a role prefix, add it
+        if not response.startswith("Agent A:") and not response.startswith("Agent B:"):
+            response = f"{expected_role}: {response}"
+        
+        # Check if there's a role switch in the middle
+        lines = response.split("\n")
+        processed_lines = []
+        
+        # The role we're currently processing
+        current_role = expected_role
+        if response.startswith("Agent A:"):
+            current_role = "Agent A"
+        elif response.startswith("Agent B:"):
+            current_role = "Agent B"
+        
+        # Keep only the first role's content
+        for line in lines:
+            # Check for role switch indicators
+            if re.match(r"^Agent [AB]:", line.strip()):
+                role_in_line = line.strip().split(":")[0]
+                if role_in_line != current_role:
+                    # Found a mid-response role switch, stop processing
+                    break
+            
+            processed_lines.append(line)
+        
+        # Join the processed lines
+        processed_response = "\n".join(processed_lines)
+        
+        # Ensure the response starts with the role prefix
+        if current_role == "Agent A" and not processed_response.startswith("Agent A:"):
+            processed_response = f"Agent A: {processed_response}"
+        elif current_role == "Agent B" and not processed_response.startswith("Agent B:"):
+            processed_response = f"Agent B: {processed_response}"
+        
+        return processed_response
 
     async def run_dual_agent(self, user_prompt: str, message_callback: Optional[Callable] = None, question_id: Optional[int] = None) -> Tuple[List[Dict[str, str]], float]:
         """

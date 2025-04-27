@@ -28,8 +28,9 @@ class TeacherStudentStrategy(CollaborationStrategy):
                 "the answer. Use Socratic questioning to help Agent B explore the problem space, highlight important "
                 "principles or frameworks that might be useful, and gently correct misconceptions while explaining why "
                 "they're problematic. When appropriate, introduce analogies or simplified models to clarify complex concepts. "
-                "Your goal is to help Agent B develop their own understanding and reasoning skills rather than simply "
-                "transmitting information. Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
+                "IMPORTANT: Only respond as yourself (Agent A). DO NOT simulate Agent B's responses or answer your own questions. "
+                "Wait for Agent B to respond in their own turn. Your goal is to help Agent B develop their own understanding "
+                "and reasoning skills. Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
             )
         }
     
@@ -48,8 +49,9 @@ class TeacherStudentStrategy(CollaborationStrategy):
                 "Think aloud about your reasoning process, including points of uncertainty or confusion. When Agent A "
                 "provides guidance, build upon it to advance your understanding rather than simply accepting it passively. "
                 "Ask specific questions when concepts are unclear, and try to connect new insights to what you already "
-                "understand. Your goal is to develop your own coherent solution to the problem with assistance, not to "
-                "have the solution handed to you. Demonstrate your evolving understanding as the dialogue progresses."
+                "understand. IMPORTANT: Only respond as yourself (Agent B). DO NOT simulate what Agent A might say next. "
+                "Your goal is to develop your own coherent solution to the problem with assistance, not to "
+                "have the solution handed to you. Demonstrate your evolving understanding as the dialogue progresses. "
                 "Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
             )
         }
