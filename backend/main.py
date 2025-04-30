@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict, List, Any, Optional
@@ -16,6 +16,7 @@ from agent.client import APIClient
 from datetime import datetime
 from evaluation.core import EvaluationManager
 from evaluation.benchmarks.simple_bench import SimpleBenchmark
+from evaluation.solution_evolution import get_analysis_summary
 
 # Capture the main event loop at startup
 MAIN_LOOP = asyncio.get_event_loop()
@@ -38,6 +39,12 @@ except ImportError:
 
 app = FastAPI()
 
+# Create a router for comparison endpoints
+comparison_router = APIRouter(prefix="/api/comparison", tags=["comparison"])
+
+# Reference to results directory (should be same as in main app)
+RESULTS_DIR = os.environ.get("RESULTS_DIR", "./results")
+
 # Enable CORS
 app.add_middleware(
     CORSMiddleware,
@@ -46,6 +53,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(comparison_router)
 
 # Store active debates
 active_debates = {}
@@ -650,6 +659,120 @@ async def get_conversation_log(log_id: str):
         # Ensure all required fields are present
         if "simulated_messages" not in data or "dual_messages" not in data:
             raise HTTPException(status_code=500, detail="Invalid log format")
+        
+        return data
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@comparison_router.get("/list")
+async def list_comparisons():
+    """List all available comparison reports"""
+    try:
+        if not os.path.exists(RESULTS_DIR):
+            return {"comparisons": []}
+            
+        # Look for comparison_*.json files
+        comparison_files = [f for f in os.listdir(RESULTS_DIR) if f.startswith("comparison_")]
+        
+        comparisons = []
+        for file in comparison_files:
+            path = os.path.join(RESULTS_DIR, file)
+            try:
+                with open(path, 'r') as f:
+                    data = json.load(f)
+                    # Extract id from filename
+                    file_id = file[len("comparison_"):-len(".json")]
+                    has_evolution = any(
+                        "evolution_summary" in strategy
+                        for strategy in data.get("strategies", {}).values()
+                    )
+                    comparisons.append({
+                        "id": file_id,
+                        "benchmark": data.get("benchmark", "Unknown"),
+                        "timestamp": data.get("timestamp", "Unknown"),
+                        "strategies": list(data.get("strategies", {}).keys()),
+                        "question_count": len(data.get("questions", {})),
+                        "has_evolution_metrics": has_evolution
+                    })
+            except Exception as e:
+                print(f"Error loading comparison file {file}: {e}")
+        
+        # Sort by timestamp (newest first)
+        comparisons.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        return {"comparisons": comparisons}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@comparison_router.get("/{comparison_id}")
+async def get_comparison(comparison_id: str):
+    """Get a specific comparison report"""
+    try:
+        file_path = os.path.join(RESULTS_DIR, f"comparison_{comparison_id}.json")
+        
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="Comparison report not found")
+        
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+            
+        # Check if evolution metrics are already included
+        has_evolution_metrics = any(
+            "evolution_summary" in strategy
+            for strategy in data.get("strategies", {}).values()
+        )
+        
+        # If not, and if the results have evolution data, generate the summary
+        if not has_evolution_metrics:
+            # Attempt to add evolution summary data
+            try:
+                # Build results list in the format expected by get_analysis_summary
+                for strategy_id, strategy_data in data.get("strategies", {}).items():
+                    results = []
+                    
+                    for question_id, question_data in data.get("questions", {}).items():
+                        if strategy_id in question_data:
+                            question_result = {
+                                "question_id": question_id,
+                                "simulated": {},
+                                "dual": {}
+                            }
+                            
+                            # Look for evolution data in simulated questions
+                            if "simulated" in question_data[strategy_id]:
+                                sim_data = question_data[strategy_id]["simulated"]
+                                if "evolution" in sim_data:
+                                    question_result["simulated"]["evolution"] = sim_data["evolution"]
+                            
+                            # Look for evolution data in dual questions
+                            if "dual" in question_data[strategy_id]:
+                                dual_data = question_data[strategy_id]["dual"]
+                                if "evolution" in dual_data:
+                                    question_result["dual"]["evolution"] = dual_data["evolution"]
+                                    
+                            # Only add if we have evolution data
+                            if (question_result["simulated"].get("evolution") or 
+                                question_result["dual"].get("evolution")):
+                                results.append(question_result)
+                    
+                    # If we have enough results with evolution data, generate a summary
+                    if results:
+                        evolution_summary = get_analysis_summary(results)
+                        strategy_data["evolution_summary"] = evolution_summary
+                
+                # Save the updated comparison data with evolution summaries
+                with open(file_path, 'w') as f:
+                    json.dump(data, f, indent=2)
+                    
+            except Exception as e:
+                print(f"Error generating evolution summary: {e}")
+                import traceback
+                traceback.print_exc()
+                # Continue without evolution data if there's an error
         
         return data
     

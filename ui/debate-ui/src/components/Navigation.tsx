@@ -2,7 +2,6 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Button } from './ui/button';
 import { ThemeToggle } from './ThemeToggle';
 
 export function Navigation() {
@@ -30,18 +29,7 @@ export function Navigation() {
                     : 'text-gray-400 hover:text-gray-100'
                 }`}
               >
-                Debate
-              </Link>
-              
-              <Link 
-                href="/evaluation" 
-                className={`text-sm font-medium transition-colors ${
-                  isActive('/evaluation') 
-                    ? 'text-white border-b-2 border-blue-500 py-1' 
-                    : 'text-gray-400 hover:text-gray-100'
-                }`}
-              >
-                Benchmark Evaluation
+                Test Run
               </Link>
 
               <Link 

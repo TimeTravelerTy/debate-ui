@@ -1,7 +1,6 @@
 from typing import Dict, List, Any, Optional, Tuple, Callable
 import time
 import json
-import time
 import re
 import asyncio
 
@@ -9,7 +8,7 @@ from .client import APIClient
 from .utils import extract_final_answer, format_message
 
 class AgentFramework:
-    """Core framework for managing agent interactions with asyncio support"""
+    """Core framework for managing agent interactions with asyncio support and token tracking"""
     
     def __init__(self, api_config: Dict[str, Any], strategy):
         """
@@ -21,6 +20,12 @@ class AgentFramework:
         """
         self.client = APIClient(api_config)
         self.strategy = strategy
+        # Store the strategy name for debugging
+        self._strategy_name = strategy.name if hasattr(strategy, 'name') else str(strategy)
+        print(f"Initialized AgentFramework with strategy: {self._strategy_name}")
+        
+        # Initialize token tracking for each mode
+        self.reset_token_counters()
 
     def set_strategy(self, strategy):
         """
@@ -29,9 +34,38 @@ class AgentFramework:
         Args:
             strategy: Strategy object to use
         """
+        old_strategy = self._strategy_name
         self.strategy = strategy
+        self._strategy_name = strategy.name if hasattr(strategy, 'name') else str(strategy)
+        print(f"Strategy updated: {old_strategy} -> {self._strategy_name}")
+    
+    def reset_token_counters(self):
+        """Reset all token counters"""
+        self.simulation_tokens = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
         
-    async def run_simulation(self, user_prompt: str, message_callback: Optional[Callable] = None, question_id: Optional[int] = None) -> Tuple[List[Dict[str, str]], float]:
+        self.dual_agent_tokens = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
+        
+    def get_token_usage(self):
+        """Get token usage for both simulation and dual-agent approaches"""
+        return {
+            "simulation": self.simulation_tokens,
+            "dual_agent": self.dual_agent_tokens,
+            "total": {
+                "prompt_tokens": self.simulation_tokens["prompt_tokens"] + self.dual_agent_tokens["prompt_tokens"],
+                "completion_tokens": self.simulation_tokens["completion_tokens"] + self.dual_agent_tokens["completion_tokens"],
+                "total_tokens": self.simulation_tokens["total_tokens"] + self.dual_agent_tokens["total_tokens"]
+            }
+        }
+        
+    async def run_simulation(self, user_prompt: str, message_callback: Optional[Callable] = None, question_id: Optional[int] = None) -> Tuple[List[Dict[str, str]], float, Dict[str, int]]:
         """
         Run a simulated dialogue with a single model alternating between two agents
         
@@ -41,8 +75,18 @@ class AgentFramework:
             question_id: Optional question ID to determine final answerer
                 
         Returns:
-            Tuple of (list of message dictionaries, execution_time_in_seconds)
+            Tuple of (list of message dictionaries, execution_time_in_seconds, token_usage)
         """
+        # Reset token counter for this run
+        self.simulation_tokens = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
+        
+        # Log which strategy we're using
+        print(f"Running simulation with strategy: {self._strategy_name}")
+        
         # Start timing
         start_time = time.time()
         # Determine which agent gives the final answer based on question_id
@@ -95,11 +139,16 @@ class AgentFramework:
                 next_prompt = f"(next turn) Now respond as {role}. Remember to only respond as {role}, not both agents:"
             
             # Call the API for the current turn (using await with the async client)
-            response = await self.client.call_api_async(
+            response, token_usage = await self.client.call_api_async(
                 messages + [{"role": "user", "content": next_prompt}],
                 temperature=self.strategy.get_temperature(),
                 max_tokens=self.strategy.get_max_tokens()
             )
+            
+            # Track token usage
+            self.simulation_tokens["prompt_tokens"] += token_usage["prompt_tokens"]
+            self.simulation_tokens["completion_tokens"] += token_usage["completion_tokens"]
+            self.simulation_tokens["total_tokens"] += token_usage["total_tokens"]
             
             # Clean up any "(next turn)" or "(final turn)" that might have been included in the response
             response = response.replace("(next turn)", "").replace("(final turn)", "")
@@ -159,13 +208,15 @@ class AgentFramework:
                         
                 previous_final_answer = current_final_answer
             
-            # Add a delay to avoid rate limiting
-            await asyncio.sleep(1)
+            # No delay - DeepSeek doesn't enforce rate limits
         
         # Calculate total execution time
         execution_time = time.time() - start_time
         
-        return result_messages, execution_time
+        # Print token usage
+        print(f"Simulation token usage: {self.simulation_tokens['total_tokens']} total tokens")
+        
+        return result_messages, execution_time, self.simulation_tokens
 
     def _process_simulation_response(self, response: str, expected_role: str) -> str:
         """
@@ -215,7 +266,7 @@ class AgentFramework:
         
         return processed_response
 
-    async def run_dual_agent(self, user_prompt: str, message_callback: Optional[Callable] = None, question_id: Optional[int] = None) -> Tuple[List[Dict[str, str]], float]:
+    async def run_dual_agent(self, user_prompt: str, message_callback: Optional[Callable] = None, question_id: Optional[int] = None) -> Tuple[List[Dict[str, str]], float, Dict[str, int]]:
         """
         Run a dialogue between two separate agent instances
         
@@ -225,8 +276,18 @@ class AgentFramework:
             question_id: Optional question ID to determine final answerer
             
         Returns:
-            Tuple of (list of message dictionaries, execution_time_in_seconds)
+            Tuple of (list of message dictionaries, execution_time_in_seconds, token_usage)
         """
+        # Reset token counter for this run
+        self.dual_agent_tokens = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0
+        }
+        
+        # Log which strategy we're using
+        print(f"Running dual agent with strategy: {self._strategy_name}")
+        
         # Start timing
         start_time = time.time()
         # Determine which agent gives the final answer based on question_id
@@ -266,8 +327,8 @@ class AgentFramework:
         # Create result messages
         result_messages = [{"role": "user", "content": user_prompt}]
         
-        # Get number of turns from strategy
-        num_turns = self.strategy.get_num_turns()
+        # Get number of turns from strategy - allow for early stopping to save time
+        num_turns = min(self.strategy.get_num_turns(), 5)  # Limit to 5 turns for optimization
         
         # Track final answers for convergence detection
         previous_final_answer = None
@@ -286,11 +347,16 @@ class AgentFramework:
                     # Add a hint for the final turn
                     messages_a.append({"role": "user", "content": "This is your final response. Please conclude with 'Final Answer:' followed by your conclusion based on the entire discussion."})
                 
-                response = await self.client.call_api_async(
+                response, token_usage = await self.client.call_api_async(
                     messages_a,
                     temperature=self.strategy.get_temperature(),
                     max_tokens=self.strategy.get_max_tokens()
                 )
+                
+                # Track token usage
+                self.dual_agent_tokens["prompt_tokens"] += token_usage["prompt_tokens"]
+                self.dual_agent_tokens["completion_tokens"] += token_usage["completion_tokens"]
+                self.dual_agent_tokens["total_tokens"] += token_usage["total_tokens"]
                 
                 # If we added a final turn hint, remove it from the history for clean state
                 if is_final_turn and is_final_answerer:
@@ -308,6 +374,9 @@ class AgentFramework:
                 # Call the callback if provided
                 if message_callback:
                     await message_callback("Agent A", response, "dual")
+
+                # Print strategy name with response for debugging
+                print(f"[Turn {turn+1}] Agent A (strategy: {self._strategy_name}): {response[:100]}...")
             else:
                 # Check if this is the final turn for Agent B
                 is_final_turn = (turn == num_turns - 1)
@@ -321,11 +390,16 @@ class AgentFramework:
                     # If it's the final turn but B is not the final answerer
                     messages_b.append({"role": "user", "content": "This is your final response. Please provide your final thoughts on the problem."})
                 
-                response = await self.client.call_api_async(
+                response, token_usage = await self.client.call_api_async(
                     messages_b,
                     temperature=self.strategy.get_temperature(),
                     max_tokens=self.strategy.get_max_tokens()
                 )
+                
+                # Track token usage
+                self.dual_agent_tokens["prompt_tokens"] += token_usage["prompt_tokens"]
+                self.dual_agent_tokens["completion_tokens"] += token_usage["completion_tokens"]
+                self.dual_agent_tokens["total_tokens"] += token_usage["total_tokens"]
                 
                 # If we added a final turn hint, remove it from the history for clean state
                 if is_final_turn:
@@ -343,8 +417,9 @@ class AgentFramework:
                 # Call the callback if provided
                 if message_callback:
                     await message_callback("Agent B", response, "dual")
-            
-            print(f"[Turn {turn+1}] {role}: {response[:100]}...")
+                
+                # Print strategy name with response for debugging
+                print(f"[Turn {turn+1}] Agent B (strategy: {self._strategy_name}): {response[:100]}...")
             
             # Check for convergence (if not the final turn)
             if turn < num_turns - 1:
@@ -369,13 +444,15 @@ class AgentFramework:
                         
                 previous_final_answer = current_final_answer
             
-            # Add a delay to avoid rate limiting
-            await asyncio.sleep(1)
+            # No delay - DeepSeek doesn't enforce rate limits
         
         # Calculate total execution time
         execution_time = time.time() - start_time
         
-        return result_messages, execution_time
+        # Print token usage
+        print(f"Dual agent token usage: {self.dual_agent_tokens['total_tokens']} total tokens")
+        
+        return result_messages, execution_time, self.dual_agent_tokens
 
     def extract_final_answer(self, messages: List[Dict[str, str]]) -> str:
         """
