@@ -667,15 +667,20 @@ async def get_conversation_log(log_id: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
     
+comparison_router = APIRouter(prefix="/api/comparison", tags=["comparison"])
+    
+
 @comparison_router.get("/list")
 async def list_comparisons():
     """List all available comparison reports"""
     try:
         if not os.path.exists(RESULTS_DIR):
+            print(f"Results directory not found: {RESULTS_DIR}")
             return {"comparisons": []}
             
         # Look for comparison_*.json files
         comparison_files = [f for f in os.listdir(RESULTS_DIR) if f.startswith("comparison_")]
+        print(f"Found {len(comparison_files)} comparison files in {RESULTS_DIR}")
         
         comparisons = []
         for file in comparison_files:
@@ -703,11 +708,14 @@ async def list_comparisons():
         # Sort by timestamp (newest first)
         comparisons.sort(key=lambda x: x["timestamp"], reverse=True)
         
+        print(f"Returning {len(comparisons)} comparison reports")
         return {"comparisons": comparisons}
     
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 @comparison_router.get("/{comparison_id}")
 async def get_comparison(comparison_id: str):
     """Get a specific comparison report"""
@@ -780,6 +788,8 @@ async def get_comparison(comparison_id: str):
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+app.include_router(comparison_router)
     
 if __name__ == "__main__":
     import uvicorn

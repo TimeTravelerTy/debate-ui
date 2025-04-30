@@ -30,7 +30,9 @@ class TeacherStudentStrategy(CollaborationStrategy):
                 "they're problematic. When appropriate, introduce analogies or simplified models to clarify complex concepts. "
                 "IMPORTANT: Only respond as yourself (Agent A). DO NOT simulate Agent B's responses or answer your own questions. "
                 "Wait for Agent B to respond in their own turn. Your goal is to help Agent B develop their own understanding "
-                "and reasoning skills. Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
+                "and reasoning skills. When confident in your reasoning, you may provide a conclusion with 'Final Answer: X'. IMPORTANT: When you see the "
+                "prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
+                "This is critical for evaluation purposes."
             )
         }
     
@@ -52,6 +54,8 @@ class TeacherStudentStrategy(CollaborationStrategy):
                 "understand. IMPORTANT: Only respond as yourself (Agent B). DO NOT simulate what Agent A might say next. "
                 "Your goal is to develop your own coherent solution to the problem with assistance, not to "
                 "have the solution handed to you. Demonstrate your evolving understanding as the dialogue progresses. "
-                "Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
+                "When confident in your reasoning, you may provide a conclusion with 'Final Answer: X'. IMPORTANT: When you see the "
+                "prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
+                "This is critical for evaluation purposes."
             )
         }

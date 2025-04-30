@@ -64,17 +64,27 @@ const TableCell: React.FC<React.PropsWithChildren<{ className?: string }>> = ({ 
   </td>
 );
 
-// Create an API function to fetch comparison data
+// Update the getComparisonList function with better error handling
 async function getComparisonList(): Promise<{ comparisons: ComparisonRun[] }> {
   try {
+    console.log("Fetching comparison list from /api/comparison/list");
     const response = await fetch('/api/comparison/list');
+    
+    console.log("Response status:", response.status);
+    
     if (!response.ok) {
-      throw new Error('Failed to fetch comparison list');
+      const errorText = await response.text();
+      console.error("Error response:", errorText);
+      throw new Error(`Failed to fetch comparison list: ${response.status} ${response.statusText}`);
     }
-    return await response.json();
+    
+    const data = await response.json();
+    console.log("Received comparison data:", data);
+    return data;
   } catch (error) {
     console.error('Error fetching comparison list:', error);
-    throw error;
+    // Return empty result instead of throwing to prevent component crash
+    return { comparisons: [] };
   }
 }
 

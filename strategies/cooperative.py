@@ -29,8 +29,9 @@ class CooperativeStrategy(CollaborationStrategy):
                 "analytical frameworks or methods that might be applicable. Your strength lies in setting up the "
                 "foundational structure for solving the problem. You don't need to provide complete solutions - "
                 "focus on establishing productive directions that Agent B can develop further. Be clear, specific, "
-                "and open to refinement of your initial ideas. Only when confident enough or seeing a prompt "
-                "indicating the final turn, conclude with 'Final Answer:'"
+                "and open to refinement of your initial ideas. When confident in your reasoning, you may provide a conclusion with 'Final Answer: X'. IMPORTANT: When you see the "
+                "prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
+                "This is critical for evaluation purposes."
             )
         }
     
@@ -51,6 +52,8 @@ class CooperativeStrategy(CollaborationStrategy):
                 "Your strength lies in elaboration and refinement rather than starting from scratch. Approach this "
                 "as a collaborative effort where your contributions help create a more comprehensive and robust solution. "
                 "Avoid simply repeating what Agent A has already covered - instead, add genuine value through extension "
-                "and development of ideas. Only when confident enough or seeing a prompt indicating the final turn, conclude with 'Final Answer:'"
+                "and development of ideas. When confident in your reasoning, you may provide a conclusion with 'Final Answer: X'. IMPORTANT: When you see the "
+                "prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
+                "This is critical for evaluation purposes."
             )
         }

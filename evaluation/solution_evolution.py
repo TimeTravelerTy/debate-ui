@@ -262,10 +262,10 @@ def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     
     # Counters for simulated vs dual
     simulated_agreement = {"Complete Agreement": 0, "Resolved Disagreement": 0, "Unresolved Disagreement": 0}
-    dual_agreement = {"Complete Agreement": 0, "Resolved Disagreement": 0, "Unresolved Disagreement": 0}
+    dual_agreement_counts = {"Complete Agreement": 0, "Resolved Disagreement": 0, "Unresolved Disagreement": 0}
     
     simulated_correctness = {"Stable Correct": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0}
-    dual_correctness = {"Stable Correct": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0}
+    dual_correctness_counts = {"Stable Correct": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0}
     
     # Count patterns
     for result in results:
@@ -286,18 +286,18 @@ def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         
         # Dual
         if "dual" in result and "evolution" in result["dual"]:
-            dual_agreement = result["dual"]["evolution"]["agreement_pattern"]
-            dual_correctness = result["dual"]["evolution"]["correctness_pattern"]
+            dual_agreement_pattern = result["dual"]["evolution"]["agreement_pattern"]
+            dual_correctness_pattern = result["dual"]["evolution"]["correctness_pattern"]
             
-            if dual_agreement in agreement_counts:
-                agreement_counts[dual_agreement] += 1
-                if dual_agreement in dual_agreement:
-                    dual_agreement[dual_agreement] += 1
+            if dual_agreement_pattern in agreement_counts:
+                agreement_counts[dual_agreement_pattern] += 1
+                if dual_agreement_pattern in dual_agreement_counts:
+                    dual_agreement_counts[dual_agreement_pattern] += 1
                     
-            if dual_correctness in correctness_counts:
-                correctness_counts[dual_correctness] += 1
-                if dual_correctness in dual_correctness:
-                    dual_correctness[dual_correctness] += 1
+            if dual_correctness_pattern in correctness_counts:
+                correctness_counts[dual_correctness_pattern] += 1
+                if dual_correctness_pattern in dual_correctness_counts:
+                    dual_correctness_counts[dual_correctness_pattern] += 1
     
     return {
         "agreement_counts": agreement_counts,
@@ -307,7 +307,7 @@ def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
             "correctness": simulated_correctness
         },
         "dual": {
-            "agreement": dual_agreement,
-            "correctness": dual_correctness
+            "agreement": dual_agreement_counts,
+            "correctness": dual_correctness_counts
         }
     }
