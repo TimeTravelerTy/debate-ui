@@ -20,7 +20,8 @@ class SimpleBenchmark(Benchmark):
         """
         super().__init__(
             name="SimpleBench", 
-            description="Simple questions for humans that challenge LLMs"
+            description="Simple questions for humans that challenge LLMs",
+            answer_format="letter"
         )
         self.json_path = json_path
         self.csv_path = csv_path
@@ -65,83 +66,4 @@ class SimpleBenchmark(Benchmark):
         
         return data
     
-    def evaluate_response(self, question_id: int, response: str) -> Dict[str, Any]:
-        """
-        Extract answer from response and compare to ground truth
-        
-        Args:
-            question_id: ID of the question
-            response: Model response to evaluate
-            
-        Returns:
-            Dictionary with evaluation results
-        """
-        # Ensure data is loaded
-        if self.data is None:
-            self.load_data()
-            
-        # Get question and ground truth
-        question_data = self.data.get(question_id)
-        if not question_data:
-            return {
-                "correct": False,
-                "ground_truth": None,
-                "extracted_answer": None,
-                "error": f"Question ID {question_id} not found"
-            }
-            
-        ground_truth = question_data["answer"]
-        
-        # Extract answer from response
-        extracted_answer = self._extract_answer_letter(response)
-        
-        return {
-            "correct": extracted_answer == ground_truth,
-            "ground_truth": ground_truth,
-            "extracted_answer": extracted_answer
-        }
-    
-    def evaluate_answer(self, answer: str, ground_truth: str) -> bool:
-        """
-        Evaluate if an answer is correct
-        
-        Args:
-            answer: The answer to evaluate
-            ground_truth: The ground truth answer
-            
-        Returns:
-            Boolean indicating if the answer is correct
-        """
-        extracted_answer = self._extract_answer_letter(answer)
-        if not extracted_answer:
-            return False
-            
-        return extracted_answer.upper() == ground_truth.upper()
-        
-    def _extract_answer_letter(self, response: str) -> Optional[str]:
-        """Extract the answer letter (A-F) from the response, handling various formats"""
-        # Match "Final Answer: X" format, including possible markdown formatting
-        # This handles: Final Answer: A, Final Answer: *A*, Final Answer: **A**, etc.
-        match = re.search(r"Final Answer:\s*\*{0,2}([A-F])\*{0,2}", response, re.IGNORECASE)
-        if match:
-            return match.group(1).upper()
-        
-        # Try to find "The answer is X" format
-        match = re.search(r"[Tt]he answer is\s*\*{0,2}([A-F])\*{0,2}", response)
-        if match:
-            return match.group(1).upper()
-        
-        # Try to match a standalone letter that's likely to be the answer
-        # Look for patterns like "Option A" or "Answer: B" or just "C."
-        match = re.search(r"(?:[Oo]ption|[Aa]nswer|:)\s*\*{0,2}([A-F])\*{0,2}[\.|\s]", response)
-        if match:
-            return match.group(1).upper()
-        
-        # Last resort: look for any standalone A-F with word boundaries
-        match = re.search(r"\b\*{0,2}([A-F])\*{0,2}\b", response, re.IGNORECASE)
-        if match:
-            return match.group(1).upper()
-        
-        # No answer found
-        return None
         

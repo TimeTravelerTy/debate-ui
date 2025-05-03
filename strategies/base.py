@@ -18,19 +18,22 @@ class CollaborationStrategy:
 
         self.simple_bench_instructions = (
             "\n\nIMPORTANT: This is a multiple-choice question from the SimpleBench dataset. "
-            "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
-            "one of the provided options (A, B, C, D, E, or F). For example, 'Final Answer: B'. "
-        )
-        self.gpqa_instructions = (
-                "\n\nIMPORTANT: This is a multiple-choice question from the Graduate-level Professional QA (GPQA) dataset. "
-                "The question requires expertise in a specialized domain. "
-                "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
-                "one of the provided options (A, B, C, D). For example, 'Final Answer: A'. "
-        )
-        self.answer_instructions = (
-            " You must include an intermediate answer in EVERY response using the format 'Answer: X'. DO NOT use placeholders "
+            "In EVERY response except the final turn, you must include a line with your current best answer using the format 'Answer: X' "
+            "where X is a specific choice (A, B, C, D, E or F) DO NOT use placeholders "
             "like 'still thinking' or 'unclear' - make your best guess if uncertain. This intermediate "
             "answer must be included even when you're not fully confident. This helps track your reasoning progress. "
+            "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
+            "one of the provided options (A, B, C, D, E, or F)."
+        )
+        self.gpqa_instructions = (
+            "\n\nIMPORTANT: This is a multiple-choice question from the Graduate-level Professional QA (GPQA) dataset. "
+            "In EVERY response except the final turn, you must include a line with your current best answer using the format 'Answer: X' "
+            "where X is a specific choice (A, B, C, D) DO NOT use placeholders "
+            "like 'still thinking' or 'unclear' - make your best guess if uncertain. This intermediate "
+            "answer must be included even when you're not fully confident. This helps track your reasoning progress. "
+            "The question requires expertise in a specialized domain. "
+            "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
+            "one of the provided options (A, B, C, D). "
         )
         
         # Load configuration from file if provided
@@ -47,10 +50,7 @@ class CollaborationStrategy:
     
     def get_system_prompt_a(self):
         """Get system prompt for Agent A"""
-        base_prompt = {
-            "role": "system",
-            "content": self._get_base_system_prompt_a()["content"] + self.answer_instructions
-        }
+        base_prompt = self._get_base_system_prompt_a()
         
         # Add benchmark-specific instructions if needed
         if self.benchmark_name == "SimpleBench":
@@ -68,10 +68,7 @@ class CollaborationStrategy:
     
     def get_system_prompt_b(self) -> Dict[str, str]:
         """Get system prompt for Agent B"""
-        base_prompt = {
-            "role": "system",
-            "content": self._get_base_system_prompt_b()["content"] + self.answer_instructions
-        }
+        base_prompt = self._get_base_system_prompt_b()
         
         # Add benchmark-specific instructions if needed
         if self.benchmark_name == "SimpleBench":

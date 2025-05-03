@@ -454,7 +454,7 @@ class AgentFramework:
         
         return result_messages, execution_time, self.dual_agent_tokens
 
-    def extract_final_answer(self, messages: List[Dict[str, str]]) -> str:
+    def extract_final_answer(self, messages: List[Dict[str, str]], answer_format: str) -> str:
         """
         Extract the final answer from the conversation
         
@@ -469,7 +469,7 @@ class AgentFramework:
             content = message.get("content", "")
             
             # Look for the "Final Answer:" pattern
-            answer = extract_answer(content)
+            answer = extract_answer(content, answer_format)
             if answer:
                 return answer
                 

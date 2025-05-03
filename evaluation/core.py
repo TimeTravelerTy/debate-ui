@@ -316,7 +316,7 @@ class EvaluationManager:
                 question_id = sum(ord(c) for c in question_id_str) % 1000  # Simple hash
             
             # Run simulated and dual agent debates concurrently using the provided framework
-            print(f"Running debates for question {question['id']} using {framework.strategy.name}...")
+            print(f"Running interactions for question {question['id']} using {framework.strategy.name}...")
             
             # The run_simulation and run_dual_agent methods now return (messages, time, tokens) tuples
             sim_task = framework.run_simulation(question_text, question_id=question_id)
@@ -330,8 +330,8 @@ class EvaluationManager:
             dual_messages, dual_time, dual_tokens = dual_result
 
             # Extract final answers
-            sim_answer = framework.extract_final_answer(sim_messages)
-            dual_answer = framework.extract_final_answer(dual_messages)
+            sim_answer = framework.extract_final_answer(sim_messages, self.benchmark.answer_format)
+            dual_answer = framework.extract_final_answer(dual_messages, self.benchmark.answer_format)
             
             # Get ground truth from question data
             ground_truth = question.get('ground_truth', question.get('answer', ''))

@@ -5,7 +5,6 @@ import pandas as pd
 import random
 import re
 from .base import Benchmark
-from agent.utils import extract_answer
 
 class GPQABenchmark(Benchmark):
     """Implementation of the GPQA benchmark"""
@@ -19,7 +18,11 @@ class GPQABenchmark(Benchmark):
             variant: Which GPQA variant to use ('diamond', 'experts', 'extended', 'main')
             subset_size: Number of questions to use (optional, if None use all)
         """
-        super().__init__(name="GPQA", description=f"GPQA benchmark - {variant} variant")
+        super().__init__(
+            name="GPQA", 
+            description=f"GPQA benchmark - {variant} variant", 
+            answer_format="letter"
+        )
         self.variant = variant
         self.csv_path = csv_path
         
@@ -144,15 +147,3 @@ class GPQABenchmark(Benchmark):
             traceback.print_exc()
             return []
     
-    def evaluate_answer(self, answer: str, ground_truth: str) -> bool:
-        """
-        Evaluate if an answer is correct
-        
-        Args:
-            answer: The answer to evaluate
-            ground_truth: The ground truth answer
-            
-        Returns:
-            Boolean indicating if the answer is correct
-        """
-        return answer == ground_truth

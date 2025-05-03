@@ -5,7 +5,7 @@ import os
 class Benchmark:
     """Base class for all benchmarks"""
     
-    def __init__(self, name: str, description: str):
+    def __init__(self, name: str, description: str, answer_format: str = "letter"):
         """
         Initialize a benchmark
         
@@ -16,6 +16,7 @@ class Benchmark:
         self.name = name
         self.description = description
         self.data = None
+        self.answer_format = answer_format
         
     def load_data(self) -> Dict[int, Dict[str, Any]]:
         """
@@ -25,19 +26,17 @@ class Benchmark:
             Dictionary mapping question IDs to question data
         """
         raise NotImplementedError("Subclasses must implement load_data")
-        
-    def evaluate_response(self, question_id: int, response: str) -> Dict[str, Any]:
-        """
-        Evaluate a response against ground truth
-        
-        Args:
-            question_id: ID of the question
-            response: Model response to evaluate
-            
-        Returns:
-            Dictionary with evaluation results
-        """
-        raise NotImplementedError("Subclasses must implement evaluate_response")
+    
+    def get_answer_format_instruction(self) -> str:
+        """Get human-readable instruction for answer format"""
+        if self.answer_format == "letter":
+            return "a single letter (A, B, C, etc.)"
+        elif self.answer_format == "integer":
+            return "an integer number only"
+        elif self.answer_format == "word":
+            return "a single word"
+        else:
+            return "your answer in the specified format"
         
     def get_questions(self, max_questions: Optional[int] = None) -> Dict[int, Dict[str, Any]]:
         """
