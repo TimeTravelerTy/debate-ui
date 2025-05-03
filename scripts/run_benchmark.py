@@ -27,12 +27,13 @@ from strategies.teacher_student import TeacherStudentStrategy
 # Import benchmark modules
 from evaluation.benchmarks.simple_bench import SimpleBenchmark
 from evaluation.benchmarks.gpqa_benchmark import GPQABenchmark
+from evaluation.benchmarks.aime_benchmark import AIMEBenchmark
 from evaluation.core import EvaluationManager
 
 # Configure argument parser
 parser = argparse.ArgumentParser(description='Run benchmark evaluations')
 parser.add_argument('--benchmark', type=str, required=True, 
-                    choices=['simple', 'gpqa-diamond', 'gpqa-experts', 'gpqa-extended', 'gpqa-main'],
+                    choices=['simple', 'gpqa-diamond', 'gpqa-experts', 'gpqa-extended', 'gpqa-main', 'aime'],
                     help='Benchmark to evaluate')
 parser.add_argument('--strategy', type=str, nargs='+', default=['debate'],
                     choices=['debate', 'cooperative', 'teacher-student', 'all'],
@@ -155,6 +156,12 @@ async def main():
         # Set the benchmark name for all strategies
         for s_id in strategy_ids:
             strategies[s_id].benchmark_name = "GPQA"
+
+    elif args.benchmark == 'aime':
+        benchmark = AIMEBenchmark(years_range=(2021, 2024), max_questions=args.questions)
+        # Set the benchmark name for all strategies
+        for s_id in strategy_ids:
+            strategies[s_id].benchmark_name = "AIME"
         
     else:
         print(f"Error: Unknown benchmark: {args.benchmark}")

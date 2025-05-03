@@ -35,6 +35,15 @@ class CollaborationStrategy:
             "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
             "one of the provided options (A, B, C, D). "
         )
+        self.aime_instructions = (
+            "\n\nIMPORTANT: This is a mathematics problem from the American Invitational Mathematics Examination (AIME). "
+            "In EVERY response except the final turn, you must include a line with your current best answer using the format 'Answer: N' "
+            "where N is a specific integer (0-999). DO NOT use placeholders "
+            "like 'still thinking' or 'unclear' - make your best guess if uncertain. This intermediate "
+            "answer must be included even when you're not fully confident. This helps track your reasoning progress. "
+            "AIME problems always have integer answers between 0 and 999 inclusive. "
+            "Your final answer MUST be in the format 'Final Answer: N' where N is your integer answer. "
+        )
         
         # Load configuration from file if provided
         if config_path and os.path.exists(config_path):
@@ -63,6 +72,11 @@ class CollaborationStrategy:
                 "role": "system",
                 "content": base_prompt["content"] + self.gpqa_instructions
             }
+        elif self.benchmark_name == "AIME":
+            return {
+                "role": "system",
+                "content": base_prompt["content"] + self.aime_instructions
+            }
         
         return base_prompt
     
@@ -80,6 +94,11 @@ class CollaborationStrategy:
             return {
                 "role": "system",
                 "content": base_prompt["content"] + self.gpqa_instructions
+            }
+        elif self.benchmark_name == "AIME":
+            return {
+                "role": "system",
+                "content": base_prompt["content"] + self.aime_instructions
             }
         
         return base_prompt
