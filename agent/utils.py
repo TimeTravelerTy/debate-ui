@@ -6,11 +6,41 @@ def format_message(role: str, text: str) -> str:
     """Format a message with role label"""
     return f"{role}: {text}\n"
 
-def extract_final_answer(text: str) -> Optional[str]:
-    """Extract final answer from text if present"""
-    match = re.search(r"Final Answer:\s*(.*?)(?:\n|$)", text, re.DOTALL)
-    if match:
-        return match.group(1).strip()
+def extract_answer(text: str) -> Optional[str]:
+    """
+    Extract structured answer from text, handling multiple formats and ignoring formatting.
+    
+    Args:
+        text: Text to extract answer from
+        final_only: If True, only extract final answers
+        
+    Returns:
+        Extracted answer or None if no answer found
+    """
+    # Remove markdown formatting to avoid interference
+    clean_text = re.sub(r'\*\*|\*|__|\^|_', '', text)
+    
+    # First look for final answers with word boundary to avoid numbered list confusion
+    final_match = re.search(r'\bFinal Answer:\s*([A-F0-9][^.\n]*)', clean_text, re.IGNORECASE)
+    if final_match:
+        return final_match.group(1).strip()
+    
+    # Look for intermediate answers with "Answer: X" format with word boundary
+    int_match = re.search(r'\bAnswer:\s*([A-F0-9][^.\n]*)', clean_text, re.IGNORECASE)
+    if int_match:
+        return int_match.group(1).strip()
+    
+    # For multiple choice, look for option indicators
+    mc_match = re.search(r'\b(option|choice)\s+([A-F])\b', clean_text, re.IGNORECASE)
+    if mc_match:
+        return mc_match.group(2).upper()
+    
+    # Look for standalone answer options
+    standalone_match = re.search(r'\b([A-F])[\.:]', clean_text, re.IGNORECASE)
+    if standalone_match:
+        return standalone_match.group(1).upper()
+    
+    # No valid answer found
     return None
 
 def parse_agent_message(message: Dict[str, str]) -> Dict[str, Any]:

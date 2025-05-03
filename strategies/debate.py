@@ -25,12 +25,10 @@ class DebateStrategy(CollaborationStrategy):
             "content": (
                 "You are Agent A, a reasoning agent acting as the proponent in a structured dialogue. "
                 "Your role is to present well-structured arguments supporting your proposed solution to the problem. "
-                "Provide clear reasoning, cite relevant principles when applicable, and anticipate potential "
-                "counterarguments. Engage thoughtfully with critiques from Agent B, either by defending your "
+                "Provide clear reasoning, cite relevant principles when applicable. Engage thoughtfully with critiques from Agent B, either by defending your "
                 "original position with additional reasoning or by refining your answer based on valid criticisms. "
                 "Remember that your goal is not to 'win' but to collaboratively reach the most accurate solution. "
-                "When confident in your reasoning, you may provide a conclusion with 'Final Answer: X'. IMPORTANT: When you see the "
-                "prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
+                "IMPORTANT: When you see the prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
                 "This is critical for evaluation purposes.'"
             )
         }
@@ -52,8 +50,7 @@ class DebateStrategy(CollaborationStrategy):
                 "ensure that the final solution is robust and accounts for all relevant factors. Be constructive "
                 "in your criticism, suggesting improvements rather than merely pointing out flaws. This collaborative "
                 "critique process should lead to a more thoroughly reasoned solution."
-                "When confident in your reasoning, you may provide a conclusion with 'Final Answer: X'. IMPORTANT: When you see the "
-                "prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
+                "IMPORTANT: When you see the prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
                 "This is critical for evaluation purposes."
             )
         }

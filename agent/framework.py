@@ -5,7 +5,7 @@ import re
 import asyncio
 
 from .client import APIClient
-from .utils import extract_final_answer, format_message
+from .utils import extract_answer
 
 class AgentFramework:
     """Core framework for managing agent interactions with asyncio support and token tracking"""
@@ -187,13 +187,13 @@ class AgentFramework:
             
             # Check for convergence (if not the final turn)
             if turn < num_turns - 1:
-                current_final_answer = extract_final_answer(agent_content)
+                current_final_answer = extract_answer(agent_content)
                 if current_final_answer and previous_final_answer:
                     if current_final_answer == previous_final_answer:
                         print(f"Convergence detected! Both agents agree on: {current_final_answer}")
                         
                         # Add a final message to indicate convergence
-                        convergence_message = f"(Debate concluded early due to convergence on answer: {current_final_answer})"
+                        convergence_message = f"(Interaction concluded early due to convergence on answer: {current_final_answer})"
                         result_messages.append({
                             "role": "system", 
                             "agent": "System",
@@ -423,7 +423,7 @@ class AgentFramework:
             
             # Check for convergence (if not the final turn)
             if turn < num_turns - 1:
-                current_final_answer = extract_final_answer(response)
+                current_final_answer = extract_answer(response)
                 if current_final_answer and previous_final_answer:
                     if current_final_answer == previous_final_answer:
                         print(f"Convergence detected! Both agents agree on: {current_final_answer}")
@@ -469,7 +469,7 @@ class AgentFramework:
             content = message.get("content", "")
             
             # Look for the "Final Answer:" pattern
-            answer = extract_final_answer(content)
+            answer = extract_answer(content)
             if answer:
                 return answer
                 

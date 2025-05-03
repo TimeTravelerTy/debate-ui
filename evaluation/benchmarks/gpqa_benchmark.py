@@ -5,6 +5,7 @@ import pandas as pd
 import random
 import re
 from .base import Benchmark
+from agent.utils import extract_answer
 
 class GPQABenchmark(Benchmark):
     """Implementation of the GPQA benchmark"""
@@ -154,30 +155,4 @@ class GPQABenchmark(Benchmark):
         Returns:
             Boolean indicating if the answer is correct
         """
-        # Extract the model's answer choice (A, B, C, or D)
-        
-        # First try to find "Final Answer: X" pattern
-        final_answer_match = re.search(r"Final Answer:\s*([A-D])", answer, re.IGNORECASE)
-        
-        if final_answer_match:
-            extracted_answer = final_answer_match.group(1).upper()
-        else:
-            # Try to find any standalone option letter
-            letter_match = re.search(r"\b([A-D])[\.)]", answer, re.IGNORECASE)
-            if letter_match:
-                extracted_answer = letter_match.group(1).upper()
-            else:
-                # Last resort, just look for any A-D mention
-                letter_match = re.search(r"\b([A-D])\b", answer, re.IGNORECASE)
-                if letter_match:
-                    extracted_answer = letter_match.group(1).upper()
-                else:
-                    # No valid answer found
-                    print(f"No valid answer found in: {answer[:100]}...")
-                    return False
-        
-        # Clean up the ground truth to ensure we're comparing correctly
-        ground_truth = ground_truth.upper().strip()
-        
-        # Compare the extracted answer with the ground truth
-        return extracted_answer == ground_truth
+        return answer == ground_truth

@@ -35,7 +35,7 @@ def analyze_solution_evolution(messages: List[Dict[str, Any]], ground_truth: str
     Returns:
         Dictionary with evolution analysis results
     """
-    from agent.utils import extract_final_answer
+    from agent.utils import extract_answer
     
     # Track answers by agent in order of appearance
     answer_history = []
@@ -72,7 +72,7 @@ def analyze_solution_evolution(messages: List[Dict[str, Any]], ground_truth: str
             elif agent == "Agent B" and content.startswith("Agent B:"):
                 content = content[len("Agent B:"):].strip()
             
-        answer = extract_final_answer(content)
+        answer = extract_answer(content)
         
         if answer:
             is_correct = benchmark.evaluate_answer(answer, ground_truth)

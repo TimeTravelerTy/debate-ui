@@ -20,14 +20,17 @@ class CollaborationStrategy:
             "\n\nIMPORTANT: This is a multiple-choice question from the SimpleBench dataset. "
             "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
             "one of the provided options (A, B, C, D, E, or F). For example, 'Final Answer: B'. "
-            "Do not include explanations after the final answer line."
         )
         self.gpqa_instructions = (
                 "\n\nIMPORTANT: This is a multiple-choice question from the Graduate-level Professional QA (GPQA) dataset. "
                 "The question requires expertise in a specialized domain. "
                 "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
                 "one of the provided options (A, B, C, D). For example, 'Final Answer: A'. "
-                "Do not include explanations after the final answer line."
+        )
+        self.answer_instructions = (
+            " You must include an intermediate answer in EVERY response using the format 'Answer: X'. DO NOT use placeholders "
+            "like 'still thinking' or 'unclear' - make your best guess if uncertain. This intermediate "
+            "answer must be included even when you're not fully confident. This helps track your reasoning progress. "
         )
         
         # Load configuration from file if provided
@@ -44,13 +47,16 @@ class CollaborationStrategy:
     
     def get_system_prompt_a(self):
         """Get system prompt for Agent A"""
-        base_prompt = self._get_base_system_prompt_a()
+        base_prompt = {
+            "role": "system",
+            "content": self._get_base_system_prompt_a()["content"] + self.answer_instructions
+        }
         
         # Add benchmark-specific instructions if needed
         if self.benchmark_name == "SimpleBench":
             return {
                 "role": "system",
-                "content": base_prompt["content"] + self.simple_bench_instructions
+                "content": base_prompt["content"] + self.simple_bench_instructions 
             }
         elif self.benchmark_name == "GPQA":
             return {
@@ -62,7 +68,10 @@ class CollaborationStrategy:
     
     def get_system_prompt_b(self) -> Dict[str, str]:
         """Get system prompt for Agent B"""
-        base_prompt = self._get_base_system_prompt_b()
+        base_prompt = {
+            "role": "system",
+            "content": self._get_base_system_prompt_b()["content"] + self.answer_instructions
+        }
         
         # Add benchmark-specific instructions if needed
         if self.benchmark_name == "SimpleBench":
