@@ -32,6 +32,9 @@ def extract_answer(text: str, answer_format: str = "letter") -> Optional[str]:
         if letter_match:
             return letter_match.group(1).upper()
     elif answer_format == "integer":
+        # Check for work-in-progress indicators
+        if re.search(r'Answer:\s*\[(working|calculating|in progress)\]', answer, re.IGNORECASE):
+            return None  # Don't count as a real answer
         # Extract just the integer
         int_match = re.search(r'^\*{0,2}(-?\d+)\*{0,2}', answer)
         if int_match:

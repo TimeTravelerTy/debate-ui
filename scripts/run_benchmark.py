@@ -167,6 +167,9 @@ async def main():
         print(f"Error: Unknown benchmark: {args.benchmark}")
         return
     
+    # Set the answer format for the framework
+    framework.set_answer_format(benchmark.answer_format)
+    
     # Initialize evaluation manager
     manager = EvaluationManager(benchmark, framework, strategies, args.results_dir)
     

@@ -72,7 +72,8 @@ def analyze_solution_evolution(messages: List[Dict[str, Any]], ground_truth: str
             elif agent == "Agent B" and content.startswith("Agent B:"):
                 content = content[len("Agent B:"):].strip()
             
-        answer = extract_answer(content)
+        answer_format = getattr(benchmark, 'answer_format', 'letter')
+        answer = extract_answer(content, answer_format)
         
         if answer:
             is_correct = benchmark.evaluate_answer(answer, ground_truth)

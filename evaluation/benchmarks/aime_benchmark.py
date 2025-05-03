@@ -49,15 +49,18 @@ class AIMEBenchmark(Benchmark):
                         'part': item.get('Part', '')
                     })
             
-            # Sort by year and problem number for consistency
-            filtered_problems.sort(key=lambda x: (x['year'], x['problem_number']))
+            # Randomly sample problems if max_questions is specified
+            if self.max_questions is not None and len(filtered_problems) > self.max_questions:
+                import random
+                # Use a fixed seed for reproducibility
+                random.seed(42)
+                filtered_problems = random.sample(filtered_problems, self.max_questions)
             
-            # Limit to max_questions
-            if len(filtered_problems) > self.max_questions:
-                filtered_problems = filtered_problems[:self.max_questions]
+            # Sort by index for consistent ordering in the output
+            # (the random sample already introduced randomness)
+            filtered_problems.sort(key=lambda x: filtered_problems.index(x))
             
             # Convert to the format expected by the base class
-            # Using problem ID as dictionary key
             result = {}
             for idx, problem in enumerate(filtered_problems):
                 result[idx] = {

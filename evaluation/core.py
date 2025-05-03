@@ -64,6 +64,7 @@ class EvaluationManager:
             strategy = self.strategies[strategy_id]
             print(f"Creating framework for {strategy_id} with strategy name: {strategy.name}")
             framework_instances[strategy_id] = AgentFramework(api_config, strategy)
+            framework_instances[strategy_id].set_answer_format(self.benchmark.answer_format)
         
         # Create tasks for each strategy with its dedicated framework
         tasks = {}
@@ -143,6 +144,8 @@ class EvaluationManager:
             
             # Update the framework's strategy
             current_framework.set_strategy(strategy)
+
+        current_framework.set_answer_format(self.benchmark.answer_format)
         
         # Log which strategy we're using
         strategy_name = current_framework.strategy.name
@@ -330,8 +333,8 @@ class EvaluationManager:
             dual_messages, dual_time, dual_tokens = dual_result
 
             # Extract final answers
-            sim_answer = framework.extract_final_answer(sim_messages, self.benchmark.answer_format)
-            dual_answer = framework.extract_final_answer(dual_messages, self.benchmark.answer_format)
+            sim_answer = framework.extract_final_answer(sim_messages)
+            dual_answer = framework.extract_final_answer(dual_messages)
             
             # Get ground truth from question data
             ground_truth = question.get('ground_truth', question.get('answer', ''))

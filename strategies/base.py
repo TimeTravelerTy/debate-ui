@@ -38,9 +38,9 @@ class CollaborationStrategy:
         self.aime_instructions = (
             "\n\nIMPORTANT: This is a mathematics problem from the American Invitational Mathematics Examination (AIME). "
             "In EVERY response except the final turn, you must include a line with your current best answer using the format 'Answer: N' "
-            "where N is a specific integer (0-999). DO NOT use placeholders "
-            "like 'still thinking' or 'unclear' - make your best guess if uncertain. This intermediate "
-            "answer must be included even when you're not fully confident. This helps track your reasoning progress. "
+            "where N is a specific integer (0-999). If you haven't fully solved the problem yet, "
+            "use 'Answer: [working]' or 'Answer: [calculating]' instead of guessing a number. "
+            "Only provide a numerical answer when you're confident in your calculation. This helps track your reasoning progress. "
             "AIME problems always have integer answers between 0 and 999 inclusive. "
             "Your final answer MUST be in the format 'Final Answer: N' where N is your integer answer. "
         )
@@ -53,7 +53,7 @@ class CollaborationStrategy:
             # Default configuration
             self.config = {
                 "temperature": 0.7,
-                "max_tokens": 1000,
+                "max_tokens": 1500,
                 "num_turns": 5
             }
     

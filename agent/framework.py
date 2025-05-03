@@ -38,6 +38,10 @@ class AgentFramework:
         self.strategy = strategy
         self._strategy_name = strategy.name if hasattr(strategy, 'name') else str(strategy)
         print(f"Strategy updated: {old_strategy} -> {self._strategy_name}")
+
+    def set_answer_format(self, format: str):
+        """Set the answer format for this framework instance"""
+        self.answer_format = format
     
     def reset_token_counters(self):
         """Reset all token counters"""
@@ -187,7 +191,7 @@ class AgentFramework:
             
             # Check for convergence (if not the final turn)
             if turn < num_turns - 1:
-                current_final_answer = extract_answer(agent_content)
+                current_final_answer = extract_answer(agent_content, self.answer_format)
                 if current_final_answer and previous_final_answer:
                     if current_final_answer == previous_final_answer:
                         print(f"Convergence detected! Both agents agree on: {current_final_answer}")
@@ -423,7 +427,7 @@ class AgentFramework:
             
             # Check for convergence (if not the final turn)
             if turn < num_turns - 1:
-                current_final_answer = extract_answer(response)
+                current_final_answer = extract_answer(response, self.answer_format)
                 if current_final_answer and previous_final_answer:
                     if current_final_answer == previous_final_answer:
                         print(f"Convergence detected! Both agents agree on: {current_final_answer}")
@@ -454,7 +458,7 @@ class AgentFramework:
         
         return result_messages, execution_time, self.dual_agent_tokens
 
-    def extract_final_answer(self, messages: List[Dict[str, str]], answer_format: str) -> str:
+    def extract_final_answer(self, messages: List[Dict[str, str]]) -> str:
         """
         Extract the final answer from the conversation
         
@@ -469,7 +473,7 @@ class AgentFramework:
             content = message.get("content", "")
             
             # Look for the "Final Answer:" pattern
-            answer = extract_answer(content, answer_format)
+            answer = extract_answer(content, self.answer_format)
             if answer:
                 return answer
                 
