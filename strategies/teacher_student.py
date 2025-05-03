@@ -31,7 +31,7 @@ class TeacherStudentStrategy(CollaborationStrategy):
                 "IMPORTANT: Only respond as yourself (Agent A). DO NOT simulate Agent B's responses or answer your own questions. "
                 "Wait for Agent B to respond in their own turn. Your goal is to help Agent B develop their own understanding "
                 "and reasoning skills.\n\nIn every turn, include 'Answer: X' with what YOU think is correct, but present it as "
-                "'What do you think about Answer: X?' when talking to the student. IMPORTANT: When you see the "
+                "'What do you think about Answer: X?' or similar phrase when talking to the student. IMPORTANT: When you see the "
                 "prompt '(final turn)', you MUST end your response with 'Final Answer: X', where X is your definitive conclusion. "
                 "This is critical for evaluation purposes."
             )

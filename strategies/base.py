@@ -19,7 +19,7 @@ class CollaborationStrategy:
         self.simple_bench_instructions = (
             "\n\nIMPORTANT: This is a multiple-choice question from the SimpleBench dataset. "
             "In EVERY response except the final turn, you must include a line with your current best answer using the format 'Answer: X' "
-            "where X is a specific choice (A, B, C, D, E or F) DO NOT use placeholders "
+            "where X is a specific choice (A, B, C, D, E or F). DO NOT use placeholders "
             "like 'still thinking' or 'unclear' - make your best guess if uncertain. This intermediate "
             "answer must be included even when you're not fully confident. This helps track your reasoning progress. "
             "Your final answer MUST be in the format 'Final Answer: X' where X is exactly "
@@ -28,7 +28,7 @@ class CollaborationStrategy:
         self.gpqa_instructions = (
             "\n\nIMPORTANT: This is a multiple-choice question from the Graduate-level Professional QA (GPQA) dataset. "
             "In EVERY response except the final turn, you must include a line with your current best answer using the format 'Answer: X' "
-            "where X is a specific choice (A, B, C, D) DO NOT use placeholders "
+            "where X is a specific choice (A, B, C, D). DO NOT use placeholders "
             "like 'still thinking' or 'unclear' - make your best guess if uncertain. This intermediate "
             "answer must be included even when you're not fully confident. This helps track your reasoning progress. "
             "The question requires expertise in a specialized domain. "
