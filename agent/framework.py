@@ -8,7 +8,7 @@ from .client import APIClient
 from .utils import extract_answer
 
 class AgentFramework:
-    """Core framework for managing agent interactions with asyncio support and token tracking"""
+    """Core framework for managing agent interactions with proper token tracking"""
     
     def __init__(self, api_config: Dict[str, Any], strategy):
         """
@@ -24,7 +24,7 @@ class AgentFramework:
         self._strategy_name = strategy.name if hasattr(strategy, 'name') else str(strategy)
         print(f"Initialized AgentFramework with strategy: {self._strategy_name}")
         
-        # Initialize token tracking for each mode
+        # Initialize token tracking for each mode with proper breakdown
         self.reset_token_counters()
 
     def set_strategy(self, strategy):
@@ -44,7 +44,7 @@ class AgentFramework:
         self.answer_format = format
     
     def reset_token_counters(self):
-        """Reset all token counters"""
+        """Reset all token counters with proper breakdown"""
         self.simulation_tokens = {
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -149,10 +149,10 @@ class AgentFramework:
                 max_tokens=self.strategy.get_max_tokens()
             )
             
-            # Track token usage
-            self.simulation_tokens["prompt_tokens"] += token_usage["prompt_tokens"]
-            self.simulation_tokens["completion_tokens"] += token_usage["completion_tokens"]
-            self.simulation_tokens["total_tokens"] += token_usage["total_tokens"]
+            # Track token usage with proper breakdown
+            self.simulation_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
+            self.simulation_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
+            self.simulation_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
             
             # Clean up any "(next turn)" or "(final turn)" that might have been included in the response
             response = response.replace("(next turn)", "").replace("(final turn)", "")
@@ -211,64 +211,17 @@ class AgentFramework:
                         break
                         
                 previous_final_answer = current_final_answer
-            
-            # No delay - DeepSeek doesn't enforce rate limits
         
         # Calculate total execution time
         execution_time = time.time() - start_time
         
         # Print token usage
-        print(f"Simulation token usage: {self.simulation_tokens['total_tokens']} total tokens")
+        print(f"Simulation token usage:")
+        print(f"  Prompt tokens: {self.simulation_tokens['prompt_tokens']:,}")
+        print(f"  Completion tokens: {self.simulation_tokens['completion_tokens']:,}")
+        print(f"  Total tokens: {self.simulation_tokens['total_tokens']:,}")
         
         return result_messages, execution_time, self.simulation_tokens
-
-    def _process_simulation_response(self, response: str, expected_role: str) -> str:
-        """
-        Process simulation response to handle cases where the model switches roles mid-response
-        
-        Args:
-            response: The raw response from the model
-            expected_role: The role that was expected to respond
-            
-        Returns:
-            Processed response with only the expected role's content
-        """
-        # If the response doesn't start with a role prefix, add it
-        if not response.startswith("Agent A:") and not response.startswith("Agent B:"):
-            response = f"{expected_role}: {response}"
-        
-        # Check if there's a role switch in the middle
-        lines = response.split("\n")
-        processed_lines = []
-        
-        # The role we're currently processing
-        current_role = expected_role
-        if response.startswith("Agent A:"):
-            current_role = "Agent A"
-        elif response.startswith("Agent B:"):
-            current_role = "Agent B"
-        
-        # Keep only the first role's content
-        for line in lines:
-            # Check for role switch indicators
-            if re.match(r"^Agent [AB]:", line.strip()):
-                role_in_line = line.strip().split(":")[0]
-                if role_in_line != current_role:
-                    # Found a mid-response role switch, stop processing
-                    break
-            
-            processed_lines.append(line)
-        
-        # Join the processed lines
-        processed_response = "\n".join(processed_lines)
-        
-        # Ensure the response starts with the role prefix
-        if current_role == "Agent A" and not processed_response.startswith("Agent A:"):
-            processed_response = f"Agent A: {processed_response}"
-        elif current_role == "Agent B" and not processed_response.startswith("Agent B:"):
-            processed_response = f"Agent B: {processed_response}"
-        
-        return processed_response
 
     async def run_dual_agent(self, user_prompt: str, message_callback: Optional[Callable] = None, question_id: Optional[int] = None) -> Tuple[List[Dict[str, str]], float, Dict[str, int]]:
         """
@@ -357,10 +310,10 @@ class AgentFramework:
                     max_tokens=self.strategy.get_max_tokens()
                 )
                 
-                # Track token usage
-                self.dual_agent_tokens["prompt_tokens"] += token_usage["prompt_tokens"]
-                self.dual_agent_tokens["completion_tokens"] += token_usage["completion_tokens"]
-                self.dual_agent_tokens["total_tokens"] += token_usage["total_tokens"]
+                # Track token usage with proper breakdown
+                self.dual_agent_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
+                self.dual_agent_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
+                self.dual_agent_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
                 
                 # If we added a final turn hint, remove it from the history for clean state
                 if is_final_turn and is_final_answerer:
@@ -400,10 +353,10 @@ class AgentFramework:
                     max_tokens=self.strategy.get_max_tokens()
                 )
                 
-                # Track token usage
-                self.dual_agent_tokens["prompt_tokens"] += token_usage["prompt_tokens"]
-                self.dual_agent_tokens["completion_tokens"] += token_usage["completion_tokens"]
-                self.dual_agent_tokens["total_tokens"] += token_usage["total_tokens"]
+                # Track token usage with proper breakdown
+                self.dual_agent_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
+                self.dual_agent_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
+                self.dual_agent_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
                 
                 # If we added a final turn hint, remove it from the history for clean state
                 if is_final_turn:
@@ -447,14 +400,15 @@ class AgentFramework:
                         break
                         
                 previous_final_answer = current_final_answer
-            
-            # No delay - DeepSeek doesn't enforce rate limits
         
         # Calculate total execution time
         execution_time = time.time() - start_time
         
         # Print token usage
-        print(f"Dual agent token usage: {self.dual_agent_tokens['total_tokens']} total tokens")
+        print(f"Dual agent token usage:")
+        print(f"  Prompt tokens: {self.dual_agent_tokens['prompt_tokens']:,}")
+        print(f"  Completion tokens: {self.dual_agent_tokens['completion_tokens']:,}")
+        print(f"  Total tokens: {self.dual_agent_tokens['total_tokens']:,}")
         
         return result_messages, execution_time, self.dual_agent_tokens
 
@@ -478,3 +432,51 @@ class AgentFramework:
                 return answer
                 
         return "No final answer found."
+    
+    def _process_simulation_response(self, response: str, expected_role: str) -> str:
+        """
+        Process simulation response to handle cases where the model switches roles mid-response
+        
+        Args:
+            response: The raw response from the model
+            expected_role: The role that was expected to respond
+            
+        Returns:
+            Processed response with only the expected role's content
+        """
+        # If the response doesn't start with a role prefix, add it
+        if not response.startswith("Agent A:") and not response.startswith("Agent B:"):
+            response = f"{expected_role}: {response}"
+        
+        # Check if there's a role switch in the middle
+        lines = response.split("\n")
+        processed_lines = []
+        
+        # The role we're currently processing
+        current_role = expected_role
+        if response.startswith("Agent A:"):
+            current_role = "Agent A"
+        elif response.startswith("Agent B:"):
+            current_role = "Agent B"
+        
+        # Keep only the first role's content
+        for line in lines:
+            # Check for role switch indicators
+            if re.match(r"^Agent [AB]:", line.strip()):
+                role_in_line = line.strip().split(":")[0]
+                if role_in_line != current_role:
+                    # Found a mid-response role switch, stop processing
+                    break
+            
+            processed_lines.append(line)
+        
+        # Join the processed lines
+        processed_response = "\n".join(processed_lines)
+        
+        # Ensure the response starts with the role prefix
+        if current_role == "Agent A" and not processed_response.startswith("Agent A:"):
+            processed_response = f"Agent A: {processed_response}"
+        elif current_role == "Agent B" and not processed_response.startswith("Agent B:"):
+            processed_response = f"Agent B: {processed_response}"
+        
+        return processed_response

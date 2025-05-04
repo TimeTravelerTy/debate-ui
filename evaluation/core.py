@@ -1,5 +1,5 @@
 """
-Optimized evaluation module with token tracking and parallel processing
+Optimized evaluation module with proper token tracking (prompt vs completion)
 """
 
 from typing import Dict, List, Any, Optional, Tuple
@@ -11,7 +11,7 @@ from datetime import datetime
 from agent.framework import AgentFramework
 
 class EvaluationManager:
-    """Manager for running benchmark evaluations with optimizations"""
+    """Manager for running benchmark evaluations with proper token tracking"""
     
     def __init__(self, benchmark, framework, strategies, results_dir):
         """
@@ -120,7 +120,7 @@ class EvaluationManager:
     async def run_evaluation(self, strategy_id: str, max_questions: Optional[int] = None, 
                          skip_strategy_setting: bool = False, framework: Optional[AgentFramework] = None) -> Tuple[str, Dict[str, Any]]:
         """
-        Run a benchmark evaluation with optimized batching
+        Run a benchmark evaluation with proper token tracking
         
         Args:
             strategy_id: ID of the strategy to use
@@ -159,12 +159,16 @@ class EvaluationManager:
         print(f"Running evaluation with {len(questions)} questions from {self.benchmark.name}")
         print(f"Using strategy: {strategy_id} (Framework strategy: {strategy_name})")
         
-        # Initialize results and stats
+        # Initialize results and stats with proper token tracking
         results = []
         total_simulated_correct = 0
         total_dual_correct = 0
-        total_simulated_tokens = 0
-        total_dual_tokens = 0
+        
+        # Separate tracking for prompt vs completion tokens
+        simulated_prompt_tokens = 0
+        simulated_completion_tokens = 0
+        dual_prompt_tokens = 0
+        dual_completion_tokens = 0
         
         # Convert dict to list if needed (SimpleBenchmark returns dict, GPQA returns list)
         questions_list = []
@@ -203,15 +207,20 @@ class EvaluationManager:
                 if result["dual"]["correct"]:
                     total_dual_correct += 1
                     
-                # Update token counts
-                total_simulated_tokens += result["simulated"].get("tokens", {}).get("total_tokens", 0)
-                total_dual_tokens += result["dual"].get("tokens", {}).get("total_tokens", 0)
+                # Update token counts - now tracking prompt vs completion separately
+                sim_tokens = result["simulated"].get("tokens", {})
+                simulated_prompt_tokens += sim_tokens.get("prompt_tokens", 0)
+                simulated_completion_tokens += sim_tokens.get("completion_tokens", 0)
+                
+                dual_tokens = result["dual"].get("tokens", {})
+                dual_prompt_tokens += dual_tokens.get("prompt_tokens", 0)
+                dual_completion_tokens += dual_tokens.get("completion_tokens", 0)
                 
                 # Print summary for this question
                 print(f"Question: {result['question_id']}")
                 print(f"Ground Truth: {result['ground_truth']}")
-                print(f"Simulated Answer: {result['simulated']['answer']} - {'✓' if result['simulated']['correct'] else '✗'} ({result['simulated']['time']:.2f}s, {result['simulated'].get('tokens', {}).get('total_tokens', 0)} tokens)")
-                print(f"Dual Agent Answer: {result['dual']['answer']} - {'✓' if result['dual']['correct'] else '✗'} ({result['dual']['time']:.2f}s, {result['dual'].get('tokens', {}).get('total_tokens', 0)} tokens)")
+                print(f"Simulated Answer: {result['simulated']['answer']} - {'✓' if result['simulated']['correct'] else '✗'} ({result['simulated']['time']:.2f}s, {sim_tokens.get('completion_tokens', 0)} completion tokens)")
+                print(f"Dual Agent Answer: {result['dual']['answer']} - {'✓' if result['dual']['correct'] else '✗'} ({result['dual']['time']:.2f}s, {dual_tokens.get('completion_tokens', 0)} completion tokens)")
                 
                 # Print evolution info if available
                 if "evolution" in result["simulated"] and "evolution" in result["dual"]:
@@ -223,16 +232,32 @@ class EvaluationManager:
         simulated_accuracy = total_simulated_correct / total_questions if total_questions > 0 else 0
         dual_accuracy = total_dual_correct / total_questions if total_questions > 0 else 0
         
+        # Calculate total tokens
+        total_simulated_tokens = simulated_prompt_tokens + simulated_completion_tokens
+        total_dual_tokens = dual_prompt_tokens + dual_completion_tokens
+        
         summary = {
             "total_questions": total_questions,
             "simulated_correct": total_simulated_correct,
             "dual_correct": total_dual_correct,
             "simulated_accuracy": simulated_accuracy,
             "dual_accuracy": dual_accuracy,
+            # Keep original format for backward compatibility
             "token_usage": {
                 "simulated_tokens": total_simulated_tokens,
                 "dual_tokens": total_dual_tokens,
                 "total_tokens": total_simulated_tokens + total_dual_tokens
+            },
+            # Add new detailed token tracking
+            "completion_token_usage": {
+                "simulated_completion_tokens": simulated_completion_tokens,
+                "dual_completion_tokens": dual_completion_tokens,
+                "total_completion_tokens": simulated_completion_tokens + dual_completion_tokens
+            },
+            "prompt_token_usage": {
+                "simulated_prompt_tokens": simulated_prompt_tokens,
+                "dual_prompt_tokens": dual_prompt_tokens,
+                "total_prompt_tokens": simulated_prompt_tokens + dual_prompt_tokens
             }
         }
         
@@ -267,9 +292,12 @@ class EvaluationManager:
         print(f"Total questions: {total_questions}")
         print(f"Simulated correct: {total_simulated_correct} ({simulated_accuracy:.2%})")
         print(f"Dual agent correct: {total_dual_correct} ({dual_accuracy:.2%})")
-        print(f"Token usage: {total_simulated_tokens + total_dual_tokens} total tokens")
-        print(f"  - Simulated: {total_simulated_tokens} tokens")
-        print(f"  - Dual agent: {total_dual_tokens} tokens")
+        print(f"Token usage:")
+        print(f"  Total tokens: {total_simulated_tokens + total_dual_tokens:,}")
+        print(f"  Completion tokens: {simulated_completion_tokens + dual_completion_tokens:,}")
+        print(f"  Prompt tokens: {simulated_prompt_tokens + dual_prompt_tokens:,}")
+        print(f"  Simulated: {simulated_completion_tokens:,} completion + {simulated_prompt_tokens:,} prompt")
+        print(f"  Dual agent: {dual_completion_tokens:,} completion + {dual_prompt_tokens:,} prompt")
         print(f"Results saved to: {results_path}")
         
         return run_id, output
@@ -363,7 +391,7 @@ class EvaluationManager:
                         "answer": sim_answer,
                         "correct": sim_correct,
                         "time": sim_time,
-                        "tokens": sim_tokens,
+                        "tokens": sim_tokens,  # Now includes prompt/completion breakdown
                         "log_id": log_id,
                         "evolution": {
                             "agreement_pattern": sim_evolution["agreement_pattern"],
@@ -374,7 +402,7 @@ class EvaluationManager:
                         "answer": dual_answer,
                         "correct": dual_correct,
                         "time": dual_time,
-                        "tokens": dual_tokens,
+                        "tokens": dual_tokens,  # Now includes prompt/completion breakdown
                         "log_id": log_id,
                         "evolution": {
                             "agreement_pattern": dual_evolution["agreement_pattern"],
@@ -475,10 +503,13 @@ class EvaluationManager:
             "benchmark": self.benchmark.name,
             "strategies": {},
             "questions": {},
-            "token_usage": {}
+            "token_usage": {},
+            "completion_token_usage": {}
         }
         
         total_tokens = 0
+        total_completion_tokens = 0
+        total_prompt_tokens = 0
         
         # Build strategy comparison data
         for strategy_id, (run_id, result) in results.items():
@@ -494,12 +525,19 @@ class EvaluationManager:
                 comparison["token_usage"][strategy_id] = strategy_tokens
                 total_tokens += strategy_tokens
             
+            # Track completion token usage
+            if "completion_token_usage" in result["summary"]:
+                strategy_completion_tokens = result["summary"]["completion_token_usage"].get("total_completion_tokens", 0)
+                comparison["completion_token_usage"][strategy_id] = strategy_completion_tokens
+                total_completion_tokens += strategy_completion_tokens
+            
             # Add evolution summary if available
             if "evolution_summary" in result:
                 comparison["strategies"][strategy_id]["evolution_summary"] = result["evolution_summary"]
         
         # Add total token usage
         comparison["token_usage"]["total"] = total_tokens
+        comparison["completion_token_usage"]["total"] = total_completion_tokens
         
         # Build question-by-question comparison
         # First, get all unique question IDs
@@ -551,4 +589,8 @@ class EvaluationManager:
             json.dump(comparison, f, indent=2)
         
         print(f"Strategy comparison report saved to: {report_path}")
-        print(f"Total tokens used across all strategies: {total_tokens}")
+        print(f"Total tokens used across all strategies: {total_tokens:,}")
+        print(f"Total completion tokens: {total_completion_tokens:,}")
+        print(f"Total prompt tokens: {total_prompt_tokens:,}")
+
+        
