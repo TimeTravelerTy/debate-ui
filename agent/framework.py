@@ -26,6 +26,9 @@ class AgentFramework:
         
         # Initialize token tracking for each mode with proper breakdown
         self.reset_token_counters()
+        
+        # Set default answer format
+        self.answer_format = "letter"  # Default, can be overridden
 
     def set_strategy(self, strategy):
         """
@@ -60,8 +63,8 @@ class AgentFramework:
     def get_token_usage(self):
         """Get token usage for both simulation and dual-agent approaches"""
         return {
-            "simulation": self.simulation_tokens,
-            "dual_agent": self.dual_agent_tokens,
+            "simulation": self.simulation_tokens.copy(),
+            "dual_agent": self.dual_agent_tokens.copy(),
             "total": {
                 "prompt_tokens": self.simulation_tokens["prompt_tokens"] + self.dual_agent_tokens["prompt_tokens"],
                 "completion_tokens": self.simulation_tokens["completion_tokens"] + self.dual_agent_tokens["completion_tokens"],
@@ -81,8 +84,8 @@ class AgentFramework:
         Returns:
             Tuple of (list of message dictionaries, execution_time_in_seconds, token_usage)
         """
-        # Reset token counter for this run
-        self.simulation_tokens = {
+        # Create a new token counter for this specific run
+        run_tokens = {
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "total_tokens": 0
@@ -149,10 +152,10 @@ class AgentFramework:
                 max_tokens=self.strategy.get_max_tokens()
             )
             
-            # Track token usage with proper breakdown
-            self.simulation_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
-            self.simulation_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
-            self.simulation_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
+            # Track token usage for this run specifically
+            run_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
+            run_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
+            run_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
             
             # Clean up any "(next turn)" or "(final turn)" that might have been included in the response
             response = response.replace("(next turn)", "").replace("(final turn)", "")
@@ -215,13 +218,14 @@ class AgentFramework:
         # Calculate total execution time
         execution_time = time.time() - start_time
         
-        # Print token usage
+        # Print token usage for this run
         print(f"Simulation token usage:")
-        print(f"  Prompt tokens: {self.simulation_tokens['prompt_tokens']:,}")
-        print(f"  Completion tokens: {self.simulation_tokens['completion_tokens']:,}")
-        print(f"  Total tokens: {self.simulation_tokens['total_tokens']:,}")
+        print(f"  Prompt tokens: {run_tokens['prompt_tokens']:,}")
+        print(f"  Completion tokens: {run_tokens['completion_tokens']:,}")
+        print(f"  Total tokens: {run_tokens['total_tokens']:,}")
         
-        return result_messages, execution_time, self.simulation_tokens
+        # Return the token usage for this specific run
+        return result_messages, execution_time, run_tokens
 
     async def run_dual_agent(self, user_prompt: str, message_callback: Optional[Callable] = None, question_id: Optional[int] = None) -> Tuple[List[Dict[str, str]], float, Dict[str, int]]:
         """
@@ -235,8 +239,8 @@ class AgentFramework:
         Returns:
             Tuple of (list of message dictionaries, execution_time_in_seconds, token_usage)
         """
-        # Reset token counter for this run
-        self.dual_agent_tokens = {
+        # Create a new token counter for this specific run
+        run_tokens = {
             "prompt_tokens": 0,
             "completion_tokens": 0,
             "total_tokens": 0
@@ -310,10 +314,10 @@ class AgentFramework:
                     max_tokens=self.strategy.get_max_tokens()
                 )
                 
-                # Track token usage with proper breakdown
-                self.dual_agent_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
-                self.dual_agent_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
-                self.dual_agent_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
+                # Track token usage for this run specifically
+                run_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
+                run_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
+                run_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
                 
                 # If we added a final turn hint, remove it from the history for clean state
                 if is_final_turn and is_final_answerer:
@@ -353,10 +357,10 @@ class AgentFramework:
                     max_tokens=self.strategy.get_max_tokens()
                 )
                 
-                # Track token usage with proper breakdown
-                self.dual_agent_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
-                self.dual_agent_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
-                self.dual_agent_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
+                # Track token usage for this run specifically
+                run_tokens["prompt_tokens"] += token_usage.get("prompt_tokens", 0)
+                run_tokens["completion_tokens"] += token_usage.get("completion_tokens", 0)
+                run_tokens["total_tokens"] += token_usage.get("total_tokens", 0)
                 
                 # If we added a final turn hint, remove it from the history for clean state
                 if is_final_turn:
@@ -404,13 +408,14 @@ class AgentFramework:
         # Calculate total execution time
         execution_time = time.time() - start_time
         
-        # Print token usage
+        # Print token usage for this run
         print(f"Dual agent token usage:")
-        print(f"  Prompt tokens: {self.dual_agent_tokens['prompt_tokens']:,}")
-        print(f"  Completion tokens: {self.dual_agent_tokens['completion_tokens']:,}")
-        print(f"  Total tokens: {self.dual_agent_tokens['total_tokens']:,}")
+        print(f"  Prompt tokens: {run_tokens['prompt_tokens']:,}")
+        print(f"  Completion tokens: {run_tokens['completion_tokens']:,}")
+        print(f"  Total tokens: {run_tokens['total_tokens']:,}")
         
-        return result_messages, execution_time, self.dual_agent_tokens
+        # Return the token usage for this specific run
+        return result_messages, execution_time, run_tokens
 
     def extract_final_answer(self, messages: List[Dict[str, str]]) -> str:
         """

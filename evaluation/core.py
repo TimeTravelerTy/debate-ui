@@ -530,6 +530,14 @@ class EvaluationManager:
                 strategy_completion_tokens = result["summary"]["completion_token_usage"].get("total_completion_tokens", 0)
                 comparison["completion_token_usage"][strategy_id] = strategy_completion_tokens
                 total_completion_tokens += strategy_completion_tokens
+
+            # Track prompt token usage
+            if "prompt_token_usage" in result["summary"]:
+                strategy_prompt_tokens = result["summary"]["prompt_token_usage"].get("total_prompt_tokens", 0)
+                if "prompt_token_usage" not in comparison:
+                    comparison["prompt_token_usage"] = {}
+                comparison["prompt_token_usage"][strategy_id] = strategy_prompt_tokens
+                total_prompt_tokens += strategy_prompt_tokens
             
             # Add evolution summary if available
             if "evolution_summary" in result:
@@ -538,6 +546,9 @@ class EvaluationManager:
         # Add total token usage
         comparison["token_usage"]["total"] = total_tokens
         comparison["completion_token_usage"]["total"] = total_completion_tokens
+        if "prompt_token_usage" not in comparison:
+            comparison["prompt_token_usage"] = {}
+        comparison["prompt_token_usage"]["total"] = total_prompt_tokens
         
         # Build question-by-question comparison
         # First, get all unique question IDs
