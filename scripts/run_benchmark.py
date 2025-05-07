@@ -28,16 +28,19 @@ from strategies.teacher_student import TeacherStudentStrategy
 from evaluation.benchmarks.simple_bench import SimpleBenchmark
 from evaluation.benchmarks.gpqa_benchmark import GPQABenchmark
 from evaluation.benchmarks.aime_benchmark import AIMEBenchmark
+from evaluation.benchmarks.livebench_benchmark import LiveBenchReasoningBenchmark
 from evaluation.core import EvaluationManager
 
 # Configure argument parser
 parser = argparse.ArgumentParser(description='Run benchmark evaluations')
 parser.add_argument('--benchmark', type=str, required=True, 
-                    choices=['simple', 'gpqa-diamond', 'gpqa-experts', 'gpqa-extended', 'gpqa-main', 'aime'],
+                    choices=['simple', 'gpqa-diamond', 'gpqa-experts', 'gpqa-extended', 'gpqa-main', 'aime', 'livebench'],
                     help='Benchmark to evaluate')
 parser.add_argument('--strategy', type=str, nargs='+', default=['debate'],
                     choices=['debate', 'cooperative', 'teacher-student', 'all'],
                     help='Strategy or strategies to use for the evaluation. Use "all" to run all available strategies.')
+parser.add_argument('--categories', type=str, nargs='+', default=None,
+                    help='Specific LiveBench categories to evaluate (e.g., zebra_puzzle, spatial_reasoning)')
 parser.add_argument('--questions', type=int, default=None,
                     help='Number of questions to evaluate')
 parser.add_argument('--results-dir', type=str, default='./results',
@@ -162,6 +165,14 @@ async def main():
         # Set the benchmark name for all strategies
         for s_id in strategy_ids:
             strategies[s_id].benchmark_name = "AIME"
+
+    elif args.benchmark == 'livebench':
+        # You can specify categories to test specific reasoning tasks
+        categories = args.categories if hasattr(args, 'categories') else None
+        benchmark = LiveBenchReasoningBenchmark(max_questions=args.questions, categories=categories)
+        # Set the benchmark name for all strategies
+        for s_id in strategy_ids:
+            strategies[s_id].benchmark_name = "LiveBench"
         
     else:
         print(f"Error: Unknown benchmark: {args.benchmark}")

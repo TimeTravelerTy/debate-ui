@@ -44,6 +44,14 @@ class CollaborationStrategy:
             "AIME problems always have integer answers between 0 and 999 inclusive. "
             "Your final answer MUST be in the format 'Final Answer: N' where N is your integer answer. "
         )
+        self.livebench_instructions = (
+            "\n\nIMPORTANT: This is a reasoning problem from the LiveBench dataset. "
+            "The problem will include specific instructions for how to format your answer. "
+            "Pay careful attention to these format requirements and follow them exactly. "
+            "In EVERY response except the final turn, include your current best answer using 'Answer: X' format, ensuring X is formatted as requested. "
+            "Make your best guess if uncertain. "
+            "In your final response, use 'Final Answer: X' and ensure X is formatted precisely as requested in the problem. "
+        )
         
         # Load configuration from file if provided
         if config_path and os.path.exists(config_path):
@@ -77,6 +85,11 @@ class CollaborationStrategy:
                 "role": "system",
                 "content": base_prompt["content"] + self.aime_instructions
             }
+        elif self.benchmark_name == "LiveBench":
+            return {
+                "role": "system",
+                "content": base_prompt["content"] + self.livebench_instructions
+            }
         
         return base_prompt
     
@@ -99,6 +112,11 @@ class CollaborationStrategy:
             return {
                 "role": "system",
                 "content": base_prompt["content"] + self.aime_instructions
+            }
+        elif self.benchmark_name == "LiveBench":
+            return {
+                "role": "system",
+                "content": base_prompt["content"] + self.livebench_instructions
             }
         
         return base_prompt

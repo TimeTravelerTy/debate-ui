@@ -12,8 +12,18 @@ def extract_answer(text: str, answer_format: str = "letter") -> Optional[str]:
     
     Args:
         text: Text to extract answer from
-        answer_format: Expected format ('letter', 'integer', 'word', etc.)
+        answer_format: Expected format ('letter', 'integer', 'word', 'custom', etc.)
     """
+    # First check for solution tags - handle this as a special case for LiveBench zebra puzzles   
+    solution_match = re.search(r'<solution>(.*?)</solution>', text, re.IGNORECASE | re.DOTALL)
+    if solution_match:
+      return solution_match.group(1).strip()
+      
+    # Check for bold formatting - special case for LiveBench spatial and web of lies
+    bold_match = re.search(r'\*\*([\w\s,]+)\*\*', text, re.IGNORECASE)
+    if bold_match:
+      return bold_match.group(1).strip()
+
     # Look for Final Answer: X pattern
     match = re.search(r'Final Answer:\s*([^\n]+)', text, re.IGNORECASE)
     if not match:
@@ -25,7 +35,7 @@ def extract_answer(text: str, answer_format: str = "letter") -> Optional[str]:
         
     answer = match.group(1).strip()
     
-    # Validate format
+    # Validate format based on the expected answer type
     if answer_format == "letter":
         # Extract just the letter if there's extra text
         letter_match = re.search(r'^\*{0,2}([A-Z])\*{0,2}', answer, re.IGNORECASE)
@@ -44,11 +54,13 @@ def extract_answer(text: str, answer_format: str = "letter") -> Optional[str]:
         word_match = re.search(r'^\*{0,2}([a-zA-Z]+)\*{0,2}', answer)
         if word_match:
             return word_match.group(1)
+    elif answer_format == "custom":
+        # Clean up common formatting issues and return the answer
+        answer = re.sub(r'^\s*["\']|["\']\s*', '', answer)  # Remove outer quotes
     else:
         # Return as-is for unknown formats
         return answer
     
-    return None
 
 def parse_agent_message(message: Dict[str, str]) -> Dict[str, Any]:
     """
