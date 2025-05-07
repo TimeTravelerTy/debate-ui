@@ -6,60 +6,61 @@ def format_message(role: str, text: str) -> str:
     """Format a message with role label"""
     return f"{role}: {text}\n"
 
-def extract_answer(text: str, answer_format: str = "letter") -> Optional[str]:
+def extract_answer(content: str) -> Optional[str]:
     """
-    Extract answer from text based on expected format
+    Extract the proper answer from message content, handling various formats from LiveBench.
     
     Args:
-        text: Text to extract answer from
-        answer_format: Expected format ('letter', 'integer', 'word', 'custom', etc.)
+        content: Message content
+    
+    Returns:
+        Extracted answer or None if not found
     """
-    # First check for solution tags - handle this as a special case for LiveBench zebra puzzles   
-    solution_match = re.search(r'<solution>(.*?)</solution>', text, re.IGNORECASE | re.DOTALL)
+    # Look for <solution>...</solution> format after "Final Answer" or "Answer"
+    final_solution_match = re.search(r'final answer:\s+<solution>(.*?)</solution>', content, re.IGNORECASE | re.DOTALL)
+    if final_solution_match:
+        return final_solution_match.group(1).strip()
+    
+    solution_match = re.search(r'answer:\s+<solution>(.*?)</solution>', content, re.IGNORECASE | re.DOTALL)
     if solution_match:
-      return solution_match.group(1).strip()
-      
-    # Check for bold formatting - special case for LiveBench spatial and web of lies
-    bold_match = re.search(r'\*\*([\w\s,]+)\*\*', text, re.IGNORECASE)
-    if bold_match:
-      return bold_match.group(1).strip()
-
-    # Look for Final Answer: X pattern
-    match = re.search(r'Final Answer:\s*([^\n]+)', text, re.IGNORECASE)
-    if not match:
-        # Fallback to Answer: X
-        match = re.search(r'Answer:\s*([^\n]+)', text, re.IGNORECASE)
+        return solution_match.group(1).strip()
     
-    if not match:
-        return None
+    # General <solution> tag anywhere
+    general_solution_match = re.search(r'<solution>(.*?)</solution>', content, re.IGNORECASE | re.DOTALL)
+    if general_solution_match:
+        return general_solution_match.group(1).strip()
+    
+    # Final Answer with bold (support 2-5 asterisks)
+    final_bold_match = re.search(r'final answer:\s+\*{2,5}(.*?)\*{2,5}', content, re.IGNORECASE)
+    if final_bold_match:
+        return final_bold_match.group(1).strip()
         
-    answer = match.group(1).strip()
+    # Answer with bold (support 2-5 asterisks)
+    bold_match = re.search(r'answer:\s+\*{2,5}(.*?)\*{2,5}', content, re.IGNORECASE)
+    if bold_match:
+        return bold_match.group(1).strip()
     
-    # Validate format based on the expected answer type
-    if answer_format == "letter":
-        # Extract just the letter if there's extra text
-        letter_match = re.search(r'^\*{0,2}([A-Z])\*{0,2}', answer, re.IGNORECASE)
-        if letter_match:
-            return letter_match.group(1).upper()
-    elif answer_format == "integer":
-        # Check for work-in-progress indicators
-        if re.search(r'Answer:\s*\[(working|calculating|in progress)\]', answer, re.IGNORECASE):
-            return None  # Don't count as a real answer
-        # Extract just the integer
-        int_match = re.search(r'^\*{0,2}(-?\d+)\*{0,2}', answer)
-        if int_match:
-            return int_match.group(1)
-    elif answer_format == "word":
-        # Extract just the first word
-        word_match = re.search(r'^\*{0,2}([a-zA-Z]+)\*{0,2}', answer)
-        if word_match:
-            return word_match.group(1)
-    elif answer_format == "custom":
-        # Clean up common formatting issues and return the answer
-        answer = re.sub(r'^\s*["\']|["\']\s*', '', answer)  # Remove outer quotes
-    else:
-        # Return as-is for unknown formats
-        return answer
+    # Final Answer without formatting
+    final_plain_match = re.search(r'final answer:\s+([\w\d\s,.;]+)', content, re.IGNORECASE)
+    if final_plain_match:
+        return final_plain_match.group(1).strip()
+    
+    # Answer without formatting
+    plain_match = re.search(r'answer:\s+([\w\d\s,.;]+)', content, re.IGNORECASE)
+    if plain_match:
+        # Make sure this is actually the answer, not just a mention of "answer"
+        answer_text = plain_match.group(1).strip()
+        # Only accept if it's reasonably short and looks like an answer
+        if len(answer_text.split()) <= 15:
+            return answer_text
+    
+    # Handle numbered/comma-separated answers in solution-like format
+    # This catches answers like "1, 2, 3, 4" or "yes, no, yes"
+    list_pattern_match = re.search(r'answer:\s+((?:[\w-]+(?:,\s*[\w-]+)+))', content, re.IGNORECASE)
+    if list_pattern_match:
+        return list_pattern_match.group(1).strip()
+    
+    return None
     
 
 def parse_agent_message(message: Dict[str, str]) -> Dict[str, Any]:

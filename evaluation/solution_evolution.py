@@ -18,6 +18,8 @@ The analysis tracks two key dimensions:
    - Improvement: Progression toward correct answer
    - Deterioration: Regression from correct to incorrect
    - Mixed Pattern: Complex patterns that don't fit other categories
+   - Mixed Pattern (Final Correct): Final answers are correct
+   - Mixed Pattern (Final Incorrect): Final answers are incorrect
 """
 
 from typing import List, Dict, Any, Optional
@@ -73,7 +75,7 @@ def analyze_solution_evolution(messages: List[Dict[str, Any]], ground_truth: str
                 content = content[len("Agent B:"):].strip()
             
         answer_format = getattr(benchmark, 'answer_format', 'letter')
-        answer = extract_answer(content, answer_format)
+        answer = extract_answer(content)
         
         if answer:
             is_correct = benchmark.evaluate_answer(answer, ground_truth)
@@ -218,15 +220,23 @@ def determine_correctness_pattern(answer_history: List[Dict[str, Any]]) -> str:
     elif second_half_correct_ratio < first_half_correct_ratio:
         return "Deterioration"
     
-    # Check if final answers are correct
+    # Check if final answers are correct or incorrect
     final_correct = False
+    final_incorrect = False
     for agent in ["Agent A", "Agent B"]:
         agent_history = [item for item in answer_history if item["agent"] == agent]
-        if agent_history and agent_history[-1]["is_correct"]:
-            final_correct = True
-            break
-            
-    if final_correct:
+        if agent_history:
+            if agent_history[-1]["is_correct"]:
+                final_correct = True
+            else:
+                final_incorrect = True
+    
+    if final_correct and not final_incorrect:
+        return "Mixed Pattern (Final Correct)"
+    elif final_incorrect and not final_correct:
+        return "Mixed Pattern (Final Incorrect)"
+    elif final_correct and final_incorrect:
+        # If one agent is correct and one is not at the end, treat as Mixed Pattern (Final Correct)
         return "Mixed Pattern (Final Correct)"
     
     # If we can't classify it more specifically, return mixed
@@ -258,6 +268,7 @@ def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "Deterioration": 0,
         "Mixed Pattern": 0,
         "Mixed Pattern (Final Correct)": 0,
+        "Mixed Pattern (Final Incorrect)": 0,
         "Insufficient Data": 0
     }
     
@@ -265,8 +276,8 @@ def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     simulated_agreement = {"Complete Agreement": 0, "Resolved Disagreement": 0, "Unresolved Disagreement": 0}
     dual_agreement_counts = {"Complete Agreement": 0, "Resolved Disagreement": 0, "Unresolved Disagreement": 0}
     
-    simulated_correctness = {"Stable Correct": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0}
-    dual_correctness_counts = {"Stable Correct": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0}
+    simulated_correctness = {"Stable Correct": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0, "Mixed Pattern (Final Correct)": 0, "Mixed Pattern (Final Incorrect)": 0}
+    dual_correctness_counts = {"Stable Correct": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0, "Mixed Pattern (Final Correct)": 0, "Mixed Pattern (Final Incorrect)": 0}
     
     # Count patterns
     for result in results:
