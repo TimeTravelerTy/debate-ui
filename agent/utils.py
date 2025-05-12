@@ -60,6 +60,11 @@ def extract_answer(content: str) -> Optional[str]:
     if list_pattern_match:
         return list_pattern_match.group(1).strip()
     
+    # bolded numbers
+    bolded_numbers_match = re.search(r'\*{2,5}([\d\s,.;]+)\*{2,5}', content, re.IGNORECASE)
+    if bolded_numbers_match:
+        return bolded_numbers_match.group(1).strip()
+    
     return None
     
 

@@ -62,6 +62,11 @@ def extract_proper_answer(content: str) -> Optional[str]:
     if list_pattern_match:
         return list_pattern_match.group(1).strip()
     
+    # bolded numbers
+    bolded_numbers_match = re.search(r'\*{2,5}([\d\s,.;]+)\*{2,5}', content, re.IGNORECASE)
+    if bolded_numbers_match:
+        return bolded_numbers_match.group(1).strip()
+
     return None
 
 def detect_convergence(messages: List[Dict[str, Any]]) -> bool:
@@ -143,28 +148,32 @@ def process_log_file(log_path: str) -> Dict[str, Any]:
     for i, msg in enumerate(simulated_messages):
         truncated_sim_messages.append(msg)
         # Only check for convergence after adding an assistant message
-        if msg.get("role") == "assistant" and convergence_idx is None and detect_convergence(truncated_sim_messages):
-            # Find the index of the last assistant message in truncated_sim_messages
-            last_assistant_idx = None
-            for j in range(len(truncated_sim_messages)-1, -1, -1):
-                if truncated_sim_messages[j].get("role") == "assistant":
-                    last_assistant_idx = j
-                    break
-            # Now, find the corresponding index in the full message list
-            assistant_count = 0
-            for k, m in enumerate(simulated_messages):
-                if m.get("role") == "assistant":
-                    if assistant_count == last_assistant_idx:
-                        convergence_idx = k
-                        break
-                    assistant_count += 1
+        if msg.get("role") == "assistant" and convergence_idx is None and len([m for m in truncated_sim_messages if m.get("role") == "assistant"]) >= 2:
+            # Get last two assistant answers (normalized)
+            agent_msgs = [m for m in truncated_sim_messages if m.get("role") == "assistant"]
+            last_two = agent_msgs[-2:]
+            ans1 = extract_proper_answer(last_two[0].get("content", ""))
+            ans2 = extract_proper_answer(last_two[1].get("content", ""))
+            # Only consider convergence if both answers are not None and not empty, and are equal
+            if ans1 and ans2 and ans1 == ans2:
+                # Find the index of the second matching assistant message in the full list
+                assistant_count = 0
+                for k, m in enumerate(simulated_messages):
+                    if m.get("role") == "assistant":
+                        if assistant_count == len(agent_msgs) - 1:
+                            convergence_idx = k
+                            break
+                        assistant_count += 1
     if convergence_idx is not None:
-        truncated_sim_messages = simulated_messages[:convergence_idx+1]
-        truncated_sim_messages.append({
-            "role": "system",
-            "agent": "System",
-            "content": f"(Interaction concluded early due to convergence on answer: {extract_proper_answer(simulated_messages[convergence_idx].get('content', ''))})"
-        })
+        # Only truncate if the convergence point is NOT the last assistant message
+        assistant_indices = [i for i, m in enumerate(simulated_messages) if m.get("role") == "assistant"]
+        if convergence_idx != assistant_indices[-1]:
+            truncated_sim_messages = simulated_messages[:convergence_idx+1]
+            truncated_sim_messages.append({
+                "role": "system",
+                "agent": "System",
+                "content": f"(Interaction concluded early due to convergence on answer: {extract_proper_answer(simulated_messages[convergence_idx].get('content', ''))})"
+            })
 
     # Process dual messages with robust convergence logic
     dual_messages = log_data.get("dual_messages", [])
@@ -173,21 +182,22 @@ def process_log_file(log_path: str) -> Dict[str, Any]:
     for i, msg in enumerate(dual_messages):
         truncated_dual_messages.append(msg)
         # Only check for convergence after adding an assistant message
-        if msg.get("role") == "assistant" and convergence_idx is None and detect_convergence(truncated_dual_messages):
-            # Find the index of the last assistant message in truncated_dual_messages
-            last_assistant_idx = None
-            for j in range(len(truncated_dual_messages)-1, -1, -1):
-                if truncated_dual_messages[j].get("role") == "assistant":
-                    last_assistant_idx = j
-                    break
-            # Now, find the corresponding index in the full message list
-            assistant_count = 0
-            for k, m in enumerate(dual_messages):
-                if m.get("role") == "assistant":
-                    if assistant_count == last_assistant_idx:
-                        convergence_idx = k
-                        break
-                    assistant_count += 1
+        if msg.get("role") == "assistant" and convergence_idx is None:
+            agent_msgs = [m for m in truncated_dual_messages if m.get("role") == "assistant"]
+            if len(agent_msgs) >= 2:
+                last_two = agent_msgs[-2:]
+                ans1 = extract_proper_answer(last_two[0].get("content", ""))
+                ans2 = extract_proper_answer(last_two[1].get("content", ""))
+                # Only consider convergence if both answers are not None and not empty, and are equal
+                if ans1 and ans2 and ans1 == ans2:
+                    # Find the index of the second matching assistant message in the full list
+                    assistant_count = 0
+                    for k, m in enumerate(dual_messages):
+                        if m.get("role") == "assistant":
+                            if assistant_count == len(agent_msgs) - 1:
+                                convergence_idx = k
+                                break
+                            assistant_count += 1
     if convergence_idx is not None:
         truncated_dual_messages = dual_messages[:convergence_idx+1]
         truncated_dual_messages.append({
@@ -223,6 +233,7 @@ def process_log_file(log_path: str) -> Dict[str, Any]:
     
     sim_evolution = analyze_solution_evolution(truncated_sim_messages, ground_truth, benchmark_obj)
     dual_evolution = analyze_solution_evolution(truncated_dual_messages, ground_truth, benchmark_obj)
+
     
     # Update log data
     updated_log = {

@@ -222,8 +222,7 @@ def fix_evolution_pattern(file_path, backup=True):
         with open(file_path, 'w') as f:
             json.dump(data, f, indent=2)
         print(f"  Changes saved to: {file_path}")
-    else:
-        print(f"  No changes needed")
+
     
     return changes_made
 
