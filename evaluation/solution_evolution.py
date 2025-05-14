@@ -37,7 +37,7 @@ def analyze_solution_evolution(messages: List[Dict[str, Any]], ground_truth: str
     Returns:
         Dictionary with evolution analysis results
     """
-    from agent.utils import extract_answer
+    from agent.utils import extract_answer, extract_answer_livebench
     
     # Track answers by agent in order of appearance
     answer_history = []
@@ -75,7 +75,12 @@ def analyze_solution_evolution(messages: List[Dict[str, Any]], ground_truth: str
                 content = content[len("Agent B:"):].strip()
             
         answer_format = getattr(benchmark, 'answer_format', 'letter')
-        answer = extract_answer(content)
+        if benchmark.name == "LiveBench":
+            # Use LiveBench-specific answer extraction
+            answer = extract_answer_livebench(content)
+        else:
+            # Use generic answer extraction
+            answer = extract_answer(content, answer_format)
         
         if answer:
             is_correct = benchmark.evaluate_answer(answer, ground_truth)
@@ -171,29 +176,30 @@ def determine_correctness_pattern(answer_history: List[Dict[str, Any]]) -> str:
     if not any(unified_history):
         return "Stable Incorrect"
 
-    # Stable Correct (One Agent): at least one agent is always correct, but not all
+    # Modified "Stable Correct (One Agent)" logic:
+    # One agent is always correct AND the other agent is never correct
     agents = set(item["agent"] for item in answer_history)
-    for agent in agents:
-        agent_history = [item["is_correct"] for item in answer_history if item["agent"] == agent]
-        if agent_history and all(agent_history):
-            return "Stable Correct (One Agent)"
+    if len(agents) >= 2:
+        for agent in agents:
+            agent_history = [item["is_correct"] for item in answer_history if item["agent"] == agent]
+            other_agents_history = [item["is_correct"] for item in answer_history if item["agent"] != agent]
+            
+            if agent_history and all(agent_history) and other_agents_history and not any(other_agents_history):
+                return "Stable Correct (One Agent)"
 
+    # Simple improvement/deterioration based on first vs last state
     if len(unified_history) > 1:
         if not unified_history[0] and unified_history[-1]:
             return "Improvement"
         if unified_history[0] and not unified_history[-1]:
             return "Deterioration"
 
-    # Mixed pattern: look for a flip in the middle
-    if len(unified_history) >= 3:
-        start = unified_history[0]
-        end = unified_history[-1]
-        if end and start and any(not x for x in unified_history[1:-1]):
-            return "Mixed Pattern (Final Correct)"
-        if not end and not start and any(x for x in unified_history[1:-1]):
-            return "Mixed Pattern (Final Incorrect)"
+    # Mixed pattern with final correctness indicators
+    if unified_history[-1]:
+        return "Mixed Pattern (Final Correct)"
+    else:
+        return "Mixed Pattern (Final Incorrect)"
 
-    return "Mixed Pattern"
 
 
 def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -219,7 +225,6 @@ def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
         "Stable Correct (One Agent)": 0,
         "Improvement": 0,
         "Deterioration": 0,
-        "Mixed Pattern": 0,
         "Mixed Pattern (Final Correct)": 0,
         "Mixed Pattern (Final Incorrect)": 0,
         "Insufficient Data": 0
@@ -229,8 +234,8 @@ def get_analysis_summary(results: List[Dict[str, Any]]) -> Dict[str, Any]:
     simulated_agreement = {"Complete Agreement": 0, "Resolved Disagreement": 0, "Unresolved Disagreement": 0, "Insufficient Data": 0}
     dual_agreement_counts = {"Complete Agreement": 0, "Resolved Disagreement": 0, "Unresolved Disagreement": 0, "Insufficient Data": 0}
     
-    simulated_correctness = {"Stable Correct": 0, "Stable Correct (One Agent)": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0, "Mixed Pattern (Final Correct)": 0, "Mixed Pattern (Final Incorrect)": 0}
-    dual_correctness_counts = {"Stable Correct": 0, "Stable Correct (One Agent)": 0, "Improvement": 0, "Deterioration": 0, "Stable Incorrect": 0, "Mixed Pattern (Final Correct)": 0, "Mixed Pattern (Final Incorrect)": 0}
+    simulated_correctness = {"Stable Correct": 0, "Stable Correct (One Agent)": 0, "Improvement": 0, "Mixed Pattern (Final Correct)": 0, "Stable Incorrect": 0, "Deterioration": 0, "Mixed Pattern (Final Incorrect)": 0}
+    dual_correctness_counts = {"Stable Correct": 0, "Stable Correct (One Agent)": 0, "Improvement": 0, "Mixed Pattern (Final Correct)": 0, "Stable Incorrect": 0,"Deterioration": 0, "Mixed Pattern (Final Incorrect)": 0}
     
     # Count patterns
     for result in results:

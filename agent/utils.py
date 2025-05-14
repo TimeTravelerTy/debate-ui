@@ -6,7 +6,7 @@ def format_message(role: str, text: str) -> str:
     """Format a message with role label"""
     return f"{role}: {text}\n"
 
-def extract_answer(content: str) -> Optional[str]:
+def extract_answer_livebench(content: str) -> Optional[str]:
     """
     Extract the proper answer from message content, handling various formats from LiveBench.
     
@@ -64,6 +64,50 @@ def extract_answer(content: str) -> Optional[str]:
     bolded_numbers_match = re.search(r'\*{2,5}([\d\s,.;]+)\*{2,5}', content, re.IGNORECASE)
     if bolded_numbers_match:
         return bolded_numbers_match.group(1).strip()
+    
+    return None
+
+def extract_answer(text: str, answer_format: str = "letter") -> Optional[str]:
+    """
+    Extract answer from text based on expected format
+    
+    Args:
+        text: Text to extract answer from
+        answer_format: Expected format ('letter', 'integer', 'word', etc.)
+    """
+    # Look for Final Answer: X pattern
+    match = re.search(r'Final Answer:\s*([^\n]+)', text, re.IGNORECASE)
+    if not match:
+        # Fallback to Answer: X
+        match = re.search(r'Answer:\s*([^\n]+)', text, re.IGNORECASE)
+    
+    if not match:
+        return None
+        
+    answer = match.group(1).strip()
+    
+    # Validate format
+    if answer_format == "letter":
+        # Extract just the letter if there's extra text
+        letter_match = re.search(r'^\*{0,2}([A-Z])\*{0,2}', answer, re.IGNORECASE)
+        if letter_match:
+            return letter_match.group(1).upper()
+    elif answer_format == "integer":
+        # Check for work-in-progress indicators
+        if re.search(r'Answer:\s*\[(working|calculating|in progress)\]', answer, re.IGNORECASE):
+            return None  # Don't count as a real answer
+        # Extract just the integer
+        int_match = re.search(r'^\*{0,2}(-?\d+)\*{0,2}', answer)
+        if int_match:
+            return int_match.group(1)
+    elif answer_format == "word":
+        # Extract just the first word
+        word_match = re.search(r'^\*{0,2}([a-zA-Z]+)\*{0,2}', answer)
+        if word_match:
+            return word_match.group(1)
+    else:
+        # Return as-is for unknown formats
+        return answer
     
     return None
     
